@@ -7,9 +7,11 @@ Welcome to AFRC's documentation!
 =========================================================
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 5
    :caption: Contents:
 
+   usage/quickstart
+   modules/afrc
 
 
 Indices and tables
