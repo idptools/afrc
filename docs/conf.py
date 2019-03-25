@@ -12,16 +12,15 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-# import os
-# import sys
-# sys.path.insert(0, os.path.abspath('.'))
+import os
+import sys
+sys.path.insert(0, os.path.abspath('../.'))
 
 
 # -- Project information -----------------------------------------------------
 
 project = 'AFRC'
-copyright = ("2019, Alex Holehouse. Project structure based on the "
-             "Computational Molecular Science Python Cookiecutter version 1.0")
+copyright = ("2019, Alex Holehouse.AFRC was developed in the Pappu Lab. THIS IS A PRELIMINARY VERSION!")
 author = 'Alex Holehouse'
 
 # The short X.Y version

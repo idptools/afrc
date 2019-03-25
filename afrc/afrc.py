@@ -20,22 +20,28 @@ class AFRCException(Exception):
 class AnalyticalFRC:
     """
     The AnalyticalFRC object is the only user-facing object that the AFRC package provides. All functionality
-    is associated with function called from such an object, and the object itself is instantiated with a single
-    amino acid string.
+    is associated with function called from this object, and the object itself is instantiated with a single
+    amino acid string. For all intents and purposes, one can think of as an *AnalyticalFRC* object as holding
+    one protein sequence and providing an interface to ask specific types of polymer questions.
 
+    .. code-block:: python
+
+          from afrc import AnalyticalFRC
+          MyProtein = AnalyticalFRC('KFGGPRDQGSRHDSEQDNSDNNTIFVQGLG')
+    
     Note
     ----
     Distributions and parameters are only calculate as requested, such that initializing an Analytical FRC 
-    object is a cheap operation.
+    object is a cheap operation. However, operations relating to intramolecular distances (``get_distance_map()``, 
+    ``get_internal_scaling()`` etc. are more computationally expensive.
 
 
     Attributes
     ----------    
-
     seq : str
-       The amino acid sequence of the protein being examined.
-    
-    
+       The amino acid sequence of the protein being examined. 
+
+        
     """
 
 
@@ -52,6 +58,12 @@ class AnalyticalFRC:
             Amino acid sequence for the protein of interest (case insensitive). If this is an invalid string 
             it will raise an AFRCException.
 
+        adaptable_P_res : Bool (False)
+           Sets the resolution used for generating probability distributions. By default this is assigned to
+           a fixed value (0.05 A). However, if this is set to True a sequence-specific adaptable resolution
+           is used and calculated as :math:`d_{max} / 500.00` (where :math:`d_{max}` reflects the contour 
+           length of the polypeptide and is defined as :math:`3.7n`.
+           
         
         """
 
@@ -96,8 +108,10 @@ class AnalyticalFRC:
     #
     def __validate_mode(self, mode):
         """
-        Internal helper function that valides the passed 'mode' option is legit.
+        Internal helper function that valides the passed 'mode' option is legit. 
 
+        Must be one of mean_distance or rms.
+        
         """
         if mode not in ['mean_distance','rms']:
             raise AFRCException("Mode must be either 'mean_distance' or 'rms' (root mean-square distance)") 
@@ -108,8 +122,10 @@ class AnalyticalFRC:
     #
     def __build_matrix(self):
         """
+
         Internal function that limits matrix construction until its actually needed! The matrix in question
-        here is an [n x n] matrix of PolymerObjects for querying inter-residue distances
+        here is an [n x n] matrix of PolymerObjects for querying inter-residue distances.
+
         """
 
         if self.matrix is False:
@@ -144,7 +160,7 @@ class AnalyticalFRC:
     #
     def get_distance_map(self, mode='mean_distance'):
         """
-        Returns the complete inter-residue distance map, an [n x n] upper-triangle
+        Returns the complete inter-residue distance map, an [n x n] upper-right triangle
         matrix that can be used as a reference set for constructing scaling maps.
 
         Distances are in angstroms and are measured from the residue center of mass.
@@ -190,13 +206,15 @@ class AnalyticalFRC:
         distance between all residues that are n positions apart ( where n  is | i - j | ). 
 
         Distances are in angstroms and are measured from the residue center of mass.
+
+        A linear log-log fit of this data gives a gradient of 0.5 (:math:`\\nu^{app} = 0.5`).
         
         Parameters
         ----------
 
         mode : string {mode='mean_distance'}
-           Either the average end-to-end distance is available or the root mean-square
-           end to end distance. These values are very similar but not exactly the same.
+           Either the average inter-residue distance is available or the root mean-square
+           inter-residue distance. These values are very similar but not exactly the same.
            By default the mean_distance (``mode='mean_distance'``) is calculated, but the
            root mean-square distance can alternatively be calculated ``mode='rms'.`` 
            **mode** can *only* be set to 'mean_distance' or 'rms'.
@@ -215,8 +233,7 @@ class AnalyticalFRC:
         self.__validate_mode(mode)
         self.__build_matrix()
 
-        # set the empty dictionary and iterate through all non-redundant distances
-        
+        # set the empty dictionary and iterate through all non-redundant distances        
         rij={}
         for i in range(0,len(self.seq)):
             for j in range(i+1,len(self.seq)):
@@ -245,7 +262,7 @@ class AnalyticalFRC:
     #            
     def get_rg_distribution(self):        
         """
-        Defines the radius of gyration (Rg) distribution using equation (3) from [Lhuillier1988]_. 
+        Defines the radius of gyration (:math:`R_g`) distribution using equation (3) from [Lhuillier1988]_. 
 
         Returns
         -------
@@ -311,8 +328,8 @@ class AnalyticalFRC:
     #        
     def get_mean_rg(self):
         """
-        Returns the mean radius of gyration (Rg) as calculated from the 
-        Rg distribution.
+        Returns the mean radius of gyration (:math:`R_g`) as calculated from the 
+        :math:`R_g` distribution.
 
         Returns
         -------
@@ -324,10 +341,12 @@ class AnalyticalFRC:
         [a,b] = self.full_seq_PO.get_radius_of_gyration_distribution()
         return np.sum(a*b)
 
+
+
     def get_mean_re(self, mode='mean_distance'):
         """
-        Returns the mean radius of gyration (Rg) as calculated from the 
-        Rg distribution.
+        Returns the mean end-to-end distance (:math:`R_e`). This value can be the absolute
+        mean end-to-end distance or the root-mean-sequence end-to-end distance.
 
         Parameters
         ----------
@@ -342,11 +361,11 @@ class AnalyticalFRC:
         Returns
         -------
         float
-           Value equal to the mean radius of gyration.
+           Value equal to the average end-to-end distance (as defined by ``mode``).
 
         """
 
-        # validate
+        # validate mode
         self.__validate_mode(mode)
 
         # return based on mode selector
@@ -362,6 +381,18 @@ class AnalyticalFRC:
     # .....................................................................................
     #
     def get_mean_re_WLC(self):
+        """
+        Returns the mean end-to-end distance (:math:`R_e`). As calculated from the Worm-like
+        chain (WLC) model as defined by Zhou [Zhou2004]_. 
+        
+
+        Returns
+        -------
+        float
+           Value equal to the mean radius of gyration.
+
+        """
+
         [a,b] = self.full_seq_PO.get_end_to_end_distribution_WLC()
         return np.sum(a*b)
 
@@ -426,15 +457,33 @@ class AnalyticalFRC:
            
            
         """
+        # validate mode
+        self.__validate_mode(mode)
+
 
         self.__build_matrix()
-        return self.matrix[R1][R2].Re
+        if mode == 'mean_distance':
+            return self.matrix[R1][R2].Re
+        elif mode == 'rms':
+            return self.matrix[R1][R2].RMS_Re
+
 
     # .....................................................................................
     #
 
     def get_mean_interresidue_radius_of_gyration(self, R1,R2):
-        self.__build_matrix()
+        """
+        Returns the mean radius of gyration (:math:`R_g`) as calculated from the 
+        :math:`R_g` distribution BETWEEN a pair of residues (i.e. the :math:`R_g` distribution
+        for an internal local region of the chain).
+
+        Returns
+        -------
+        float
+           Value equal to the mean radius of gyration.
+
+        """
+
         [a,b] = self.matrix[R1][R2].get_radius_of_gyration_distribution()
         return np.sum(a*b)
         
@@ -442,6 +491,23 @@ class AnalyticalFRC:
     # .....................................................................................
     #
     def sample_rg_distribution(self,n=1000):
+        """
+        Subsamples from the :math:`R_g` distirbution to generate an uncorrelated 'trajectory' 
+        of points. Useful for creating a sized-match sample to compare with simulation
+        data.
+
+        Parameters
+        ----------
+        n : int
+           Number of random values to sample (default = 1000)
+
+        Returns
+        -------
+        np.ndarray
+           Returns an n-length array with n independent values (floats)
+
+        """
+
         return self.full_seq_PO.sample_radius_of_gyration_distribution(dist_size=n)
 
 
@@ -449,6 +515,23 @@ class AnalyticalFRC:
     # .....................................................................................
     #
     def sample_re_distribution(self,n=1000):
+        """
+        Subsamples from the end-to-end distance distribution to generate an uncorrelated 
+        'trajectory' of points. Useful for creating a sized-match sample to compare with 
+        simulation data.
+
+        Parameters
+        ----------
+        n : int
+           Number of random values to sample (default = 1000)
+        
+        Returns
+        -------
+        np.ndarray
+           Returns an n-length array with n independent values (floats)
+
+        """
+
         return self.full_seq_PO.sample_end_to_end_distribution(dist_size=n)
 
 
