@@ -3,11 +3,28 @@ AFRC Quickstart
 
 Installation
 ************************
-To install the Analytical Flory Random Coil (AFRC) package download the zip file, unzip, and then using pip install from the wheels file:
+To install the Analytical Flory Random Coil (AFRC) package download the zip file:
 
-    ``pip install dist/afrc-0.0.0+1.g537e9d4-py3-none-any.whl``
+For Python 2 download: 
+`http://pappulab.wustl.edu/Marketplace/alex/afrc/dist/afrc-0.0.0+2.g82e87c9-py2-none-any.whl <http://pappulab.wustl.edu/Marketplace/alex/afrc/dist/afrc-0.0.0+2.g82e87c9-py2-none-any.whl>`_
 
-This will install AFRC in a system-wide manner using the version of ``pip`` specified. We recommend using ``pip`` embedded within a ``conda`` environment to avoid any possible dependency issues. If you are unfamiliar with ``conda`` or ``pip`` we highly recommend reading this `this introductory material <http://geohackweek.github.io/Introductory/01-conda-tutorial//>`_.
+
+For Python 3 download: 
+`http://pappulab.wustl.edu/Marketplace/alex/afrc/dist/afrc-0.0.0+2.g82e87c9-py3-none-any.whl <http://pappulab.wustl.edu/Marketplace/alex/afrc/dist/afrc-0.0.0+2.g82e87c9-py3-none-any.whl>`_
+
+
+
+Then using pip install from the wheels file:
+
+    ``pip install afrc-0.0.0+2.g82e87c9-py2-none-any.whl``
+
+or
+
+    ``pip install afrc-0.0.0+2.g82e87c9-py3-none-any.whl``
+
+This will install AFRC in a system-wide manner using the version of ``pip`` specified. 
+
+We *strongly* recommend using ``pip`` embedded within a ``conda`` environment to avoid any possible dependency issues. If you are unfamiliar with ``conda`` or ``pip`` we highly recommend reading this `this introductory material <http://geohackweek.github.io/Introductory/01-conda-tutorial//>`_.
 
 AFRC requires ``numpy``, although this is dealt with automatically through the ``pip`` installation.
 

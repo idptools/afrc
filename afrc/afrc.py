@@ -7,6 +7,7 @@ import numpy as np
 from numpy.random import choice
 from .polymer import PolymerObject
 from .config import P_OF_R_RESOLUTION, AA_list
+from .iofunctions import validate_keyword
 
 
 class AFRCException(Exception):
@@ -106,20 +107,6 @@ class AnalyticalFRC:
 
     # .....................................................................................
     #
-    def __validate_mode(self, mode):
-        """
-        Internal helper function that valides the passed 'mode' option is legit. 
-
-        Must be one of mean_distance or rms.
-        
-        """
-        if mode not in ['mean_distance','rms']:
-            raise AFRCException("Mode must be either 'mean_distance' or 'rms' (root mean-square distance)") 
-    
-
-
-    # .....................................................................................
-    #
     def __build_matrix(self):
         """
 
@@ -153,12 +140,12 @@ class AnalyticalFRC:
         Returns the length of the sequence
         """
         return len(self.seq)
-        
+
 
 
     # .....................................................................................
     #
-    def get_distance_map(self, mode='mean_distance'):
+    def get_distance_map(self, calculation_mode='scaling law'):
         """
         Returns the complete inter-residue distance map, an [n x n] upper-right triangle
         matrix that can be used as a reference set for constructing scaling maps.
@@ -168,12 +155,6 @@ class AnalyticalFRC:
         Parameters
         ----------
 
-        mode : string {mode='mean_distance'}
-           Either the average end-to-end distance is available or the root mean-square
-           end to end distance. These values are very similar but not exactly the same.
-           By default the mean_distance (``mode='mean_distance'``) is calculated, but the
-           root mean-square distance can alternatively be calculated ``mode='rms'.`` 
-           **mode** can *only* be set to 'mean_distance' or 'rms'.
 
         Returns
         -------
@@ -183,24 +164,28 @@ class AnalyticalFRC:
         
         """
 
-        self.__validate_mode(mode)
+        # check input mode information
+        calculation_mode = validate_keyword(['distribution','scaling law'], calculation_mode, 'calculation_mode')
 
+        # construct the internal matrix of polymers
         self.__build_matrix()
+
+        # initialize the distance-distance matrix
         dm = np.zeros((len(self.seq),len(self.seq)))
         
+        # for each inter-residue dustance (not only upper right
+        # triangle is computed)
         for i in range(0,len(self.seq)):
             for j in range(i,len(self.seq)):
-                if mode == 'mean_distance':
-                    dm[i,j] = self.matrix[i][j].Re
-                elif mode == 'rms':
-                    dm[i,j] = self.matrix[i][j].RMS_Re
+                dm[i,j] = self.matrix[i][j].get_mean_end_to_end_distance(calculation_mode)
+
         return dm
 
 
 
     # .....................................................................................
     #
-    def get_internal_scaling(self, mode='mean_distance'):
+    def get_internal_scaling(self, calculation_mode='scaling law'):
         """
         Returns the internal scaling profile - a [2 by n] matrix that reports on the average
         distance between all residues that are n positions apart ( where n  is | i - j | ). 
@@ -211,13 +196,6 @@ class AnalyticalFRC:
         
         Parameters
         ----------
-
-        mode : string {mode='mean_distance'}
-           Either the average inter-residue distance is available or the root mean-square
-           inter-residue distance. These values are very similar but not exactly the same.
-           By default the mean_distance (``mode='mean_distance'``) is calculated, but the
-           root mean-square distance can alternatively be calculated ``mode='rms'.`` 
-           **mode** can *only* be set to 'mean_distance' or 'rms'.
 
         Returns
         -------
@@ -230,21 +208,22 @@ class AnalyticalFRC:
         """
 
         # validate mode and construct the matrix if not yet built
-        self.__validate_mode(mode)
+        calculation_mode = validate_keyword(['distribution','scaling law'], calculation_mode, 'calculation_mode')
         self.__build_matrix()
 
         # set the empty dictionary and iterate through all non-redundant distances        
         rij={}
+
+
+        # now cycle through every non-redundant pair
         for i in range(0,len(self.seq)):
             for j in range(i+1,len(self.seq)):
-
+                
+                # if empty initialize 
                 if j-i not in rij:
                     rij[j-i] = []
 
-                if mode == 'mean_distance':
-                    rij[j-i].append(self.matrix[i][j].Re)
-                elif mode == 'rms':
-                    rij[j-i].append(self.matrix[i][j].RMS_Re)
+                rij[j-i].append(self.matrix[i][j].get_mean_end_to_end_distance(calculation_mode))
                     
         # having established all possible distances we then
         # calculate the average 
@@ -267,9 +246,9 @@ class AnalyticalFRC:
         Returns
         -------
 
-        np.ndarray 
-           Probability distribution returned as a 2D numpy array in which column one is 
-           the distances (in Angstroms) and colum two is the probablility.
+        tuple of arrays
+           A 2-pair tuple of numpy arrays where the first is the distance (in Angstroms) and 
+           the second array is the probability of that distance.
 
         """
 
@@ -289,10 +268,9 @@ class AnalyticalFRC:
         Returns
         -------
 
-        np.ndarray 
-           Probability distribution returned as a 2D numpy array in which column one is 
-           the distances (in Angstroms) and colum two is the probablility.
-
+        tuple of arrays
+           A 2-pair tuple of numpy arrays where the first is the distance (in Angstroms) and 
+           the second array is the probability of that distance.
 
         """
 
@@ -314,9 +292,9 @@ class AnalyticalFRC:
         Returns
         -------
 
-        np.ndarray 
-           Probability distribution returned as a 2D numpy array in which column one is 
-           the distances (in Angstroms) and colum two is the probablility.
+        tuple of arrays
+           A 2-pair tuple of numpy arrays where the first is the distance (in Angstroms) and 
+           the second array is the probability of that distance.
 
         """
 
@@ -326,10 +304,20 @@ class AnalyticalFRC:
 
     # .....................................................................................
     #        
-    def get_mean_rg(self):
+    def get_mean_rg(self, calculation_mode='scaling law'):
         """
         Returns the mean radius of gyration (:math:`R_g`) as calculated from the 
         :math:`R_g` distribution.
+
+        Paramaters
+        ...........
+
+
+        calculation_mode : string (keyword)
+             calculation_mode defines the mode in which the average is calculated, and can be 
+             set to either 'scaling law' (default) or 'distribution'. If 'distribution' is used
+             then the complete Rg distribution is used to calculate the expected value. If the
+             'scaling law' is used then the standard Rg = R0 * N^{0.5} is used.        
 
         Returns
         -------
@@ -338,12 +326,12 @@ class AnalyticalFRC:
 
         """
 
-        [a,b] = self.full_seq_PO.get_radius_of_gyration_distribution()
-        return np.sum(a*b)
+        calculation_mode = validate_keyword(['distribution','scaling law'], calculation_mode, 'calculation_mode')
+
+        return self.full_seq_PO.get_mean_radius_of_gyration(calculation_mode)
 
 
-
-    def get_mean_re(self, mode='mean_distance'):
+    def get_mean_re(self, calculation_mode='scaling law'):
         """
         Returns the mean end-to-end distance (:math:`R_e`). This value can be the absolute
         mean end-to-end distance or the root-mean-sequence end-to-end distance.
@@ -351,12 +339,12 @@ class AnalyticalFRC:
         Parameters
         ----------
 
-        mode : string {mode='mean_distance'}
-           Either the average end-to-end distance is available or the root mean-square
-           end to end distance. These values are very similar but not exactly the same.
-           By default the mean_distance (``mode='mean_distance'``) is calculated, but the
-           root mean-square distance can alternatively be calculated ``mode='rms'.`` 
-           **mode** can *only* be set to 'mean_distance' or 'rms'.
+        calculation_mode : string (keyword)
+             calculation_mode defines the mode in which the average is calculated, and can be 
+             set to either 'scaling law' (default) or 'distribution'. If 'distribution' is used
+             then the complete Re distribution is used to calculate the expected value. If the
+             'scaling law' is used then the standard Re = R0 * N^{0.5} is used.        
+
 
         Returns
         -------
@@ -365,18 +353,9 @@ class AnalyticalFRC:
 
         """
 
-        # validate mode
-        self.__validate_mode(mode)
+        calculation_mode = validate_keyword(['distribution','scaling law'], calculation_mode, 'calculation_mode')
 
-        # return based on mode selector
-        if mode == 'mean_distance':        
-            return self.full_seq_PO.Re
-        elif mode == 'rms':
-            return self.full_seq_PO.RMS_Re
-        else:
-            raise AFRCException('Something has gone wrong....')
-
-
+        return self.full_seq_PO.get_mean_end_to_end_distance(calculation_mode)
 
     # .....................................................................................
     #
@@ -393,14 +372,12 @@ class AnalyticalFRC:
 
         """
 
-        [a,b] = self.full_seq_PO.get_end_to_end_distribution_WLC()
-        return np.sum(a*b)
-
-
+        return self.full_seq_PO.get_mean_end_to_end_distance_WLC()
+        
 
     # .....................................................................................
     #
-    def get_interresidue_distance_distribution(self, R1,R2):
+    def get_interresidue_distance_distribution(self, R1, R2):
         """
         Returns the distribution between a pair of residues on the chain.
 
@@ -422,13 +399,15 @@ class AnalyticalFRC:
            Probability distribution returned as a 2D numpy array in which column one is 
            the distances (in Angstroms) and colum two is the probablility.
            
-        """
-
-
+        """                
         self.__build_matrix()
         return self.matrix[R1][R2].get_end_to_end_distribution()
 
-    def get_mean_interresidue_distance(self, R1,R2,mode='mean_distance'):
+
+
+    # .....................................................................................
+    #
+    def get_mean_interresidue_distance(self, R1, R2, calculation_mode='scaling law'):
 
         """
         Returns the mean distance between a pair of residues on the chain.
@@ -442,12 +421,12 @@ class AnalyticalFRC:
         R2 : int
            The second residue of the pair being investigated.
 
-        mode : string {mode='mean_distance'}
-           Either the average end-to-end distance is available or the root mean-square
-           end to end distance. These values are very similar but not exactly the same.
-           By default the mean_distance (``mode='mean_distance'``) is calculated, but the
-           root mean-square distance can alternatively be calculated ``mode='rms'.`` 
-           **mode** can *only* be set to 'mean_distance' or 'rms'.
+        calculation_mode : string (keyword)
+             calculation_mode defines the mode in which the average is calculated, and can be 
+             set to either 'scaling law' (default) or 'distribution'. If 'distribution' is used
+             then the complete Rg distribution is used to calculate the expected value. If the
+             'scaling law' is used then the standard Rg = R0 * N^{0.5} is used.        
+
 
         Returns
         -------
@@ -457,25 +436,29 @@ class AnalyticalFRC:
            
            
         """
-        # validate mode
-        self.__validate_mode(mode)
+        calculation_mode = validate_keyword(['distribution','scaling law'], calculation_mode, 'calculation_mode')
 
-
-        self.__build_matrix()
-        if mode == 'mean_distance':
-            return self.matrix[R1][R2].Re
-        elif mode == 'rms':
-            return self.matrix[R1][R2].RMS_Re
+        return self.matrix[R1][R2].get_mean_end_to_end_distance(calculation_mode)
 
 
     # .....................................................................................
     #
 
-    def get_mean_interresidue_radius_of_gyration(self, R1,R2):
+    def get_mean_interresidue_radius_of_gyration(self, R1, R2, calculation_mode='scaling law'):
         """
         Returns the mean radius of gyration (:math:`R_g`) as calculated from the 
         :math:`R_g` distribution BETWEEN a pair of residues (i.e. the :math:`R_g` distribution
         for an internal local region of the chain).
+
+        Parameters
+        ----------
+
+        calculation_mode : string (keyword)
+             calculation_mode defines the mode in which the average is calculated, and can be 
+             set to either 'scaling law' (default) or 'distribution'. If 'distribution' is used
+             then the complete Rg distribution is used to calculate the expected value. If the
+             'scaling law' is used then the standard Rg = R0 * N^{0.5} is used.        
+
 
         Returns
         -------
@@ -483,9 +466,9 @@ class AnalyticalFRC:
            Value equal to the mean radius of gyration.
 
         """
+        calculation_mode = validate_keyword(['distribution','scaling law'], calculation_mode, 'calculation_mode')
 
-        [a,b] = self.matrix[R1][R2].get_radius_of_gyration_distribution()
-        return np.sum(a*b)
+        return self.matrix[R1][R2].get_mean_radius_of_gyration(calculation_mode)
         
 
     # .....................................................................................

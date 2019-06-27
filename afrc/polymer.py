@@ -15,9 +15,9 @@ class PolymerObject:
 
     """
 
-    ##########################################################################################
-    ##
-    def __init__(self, seq, p_of_r_resolution):
+    # .....................................................................................
+    #        
+    def __init__(self, seq, p_of_r_resolution=P_OF_R_RESOLUTION):
         """
         Method to create Polymer Object. Seq should be a valid upper-case amino acid sequence and p_of_r_resolution
         defines the resolution (in angstroms) to be used.
@@ -27,15 +27,16 @@ class PolymerObject:
         # set sequence info
         self.nres = len(seq)
         self.zero_length=False
-        self.RMS_Re = 0
-        self.Re = 0
+        self.RMS_Re_scaling = 0
         self.p_of_r_resolution = p_of_r_resolution
 
         # set distribution info to false - is calculated as needed
         self.__p_of_Re_R = False
         self.__p_of_Re_P = False
+
         self.__p_of_Rg_R = False
         self.__p_of_Rg_P = False
+
         self.__p_of_Re_P_WLC = False
         self.__p_of_Re_R_WLC = False
 
@@ -69,19 +70,18 @@ class PolymerObject:
         # and then compute the ensemble average RMS-Re and the absolute ensemble average Re
         # using the standard scaling law (R0 * N^{nu}) where nu=0.5 and R0 is calculated
         # based on composition
-        self.RMS_Re = self.__R0_RMS * np.power(self.nres,0.5)
-        self.Re = self.__R0 * np.power(self.nres,0.5)
+        self.RMS_Re_scaling = self.__R0_RMS * np.power(self.nres,0.5)
+        
 
-
-    ##########################################################################################
-    ##
+    # .....................................................................................
+    #        
     def get_end_to_end_distribution(self):
         """
         Function that returns the end-to-end distribution as a 2D numpy array.y.
 
         Returns
         -------
-        2D Numpy array in whichthe first column is the distance (in angstroms) and the second
+        2D Numpy array in which the first column is the distance (in angstroms) and the second
         column is the probablity.
         
         
@@ -90,7 +90,7 @@ class PolymerObject:
         # if we have not yet  computed the end-to-end distance distribution...
         if self.__p_of_Re_R is False:
             self.__compute_end_to_end_distribution()
-        return np.array((self.__p_of_Re_R, self.__p_of_Re_P)).transpose()
+        return (self.__p_of_Re_R, self.__p_of_Re_P)
 
 
     ##########################################################################################
@@ -105,8 +105,6 @@ class PolymerObject:
         2D Numpy array in whichthe first column is the distance (in angstroms) and the second
         column is the probablity.
         
-
-
         """
 
         # if we have not yet  computed the WLC end-to-end distance distribution...
@@ -126,6 +124,48 @@ class PolymerObject:
         if self.__p_of_Rg_R is False:
             self.__compute_Rg_distribution()
         return (self.__p_of_Rg_R, self.__p_of_Rg_P)
+
+
+    def get_mean_end_to_end_distance(self, calculation_mode='scaling law'):
+        """
+
+        """
+
+        # if we're using the scaling law relationshup
+        if calculation_mode == 'scaling law':
+            return self.__R0 * np.power(self.nres,0.5)
+
+        # if we're calculating the expected value from the distribution
+        elif calculation_mode == 'distribution':
+            [a,b] = self.get_end_to_end_distribution()
+            return np.sum(a*b)
+
+
+    def get_mean_end_to_end_distance_WLC(self):
+        """
+
+        """
+        [a,b] = self.get_end_to_end_distribution_WLC()
+        return np.sum(a*b)
+
+
+
+
+    def get_mean_radius_of_gyration(self, calculation_mode='scaling law'):
+        """
+
+        """
+
+        # if we're using the scaling law relationshup
+        if calculation_mode == 'scaling law':
+            re = self.get_mean_end_to_end_distance('scaling law')
+            return re/np.sqrt(6)
+            
+            
+        # if we're calculating the expected value from the distribution
+        elif calculation_mode == 'distribution':
+            (a,b) = self.get_radius_of_gyration_distribution()
+            return np.sum(a*b)
 
       
     ##########################################################################################
@@ -173,7 +213,10 @@ class PolymerObject:
         p_val_raw = np.zeros(len(p_dist))
         p_val_raw_alt = np.zeros(len(p_dist))
         
-        # compute end-to-end squared P of R distribution
+        # compute the ensemble average square end-to-end distance. Note that
+        # self.__R0_RMS * np.power(self.nres,0.5) gives SQRT(<Re^2>), so by squaring
+        # this we get the correct parameter (i.e. mean-squared end-to-end distance)
+        
         self.mean_squared_re = np.power(self.__R0_RMS * np.power(self.nres,0.5),2)
 
         # precompute some stuff
