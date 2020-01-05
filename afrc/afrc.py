@@ -4,7 +4,6 @@ An analytical version of the Flory Random Coil (FRC) for polypeptides, implement
 
 """
 import numpy as np
-from numpy.random import choice
 from .polymer import PolymerObject
 from .config import P_OF_R_RESOLUTION, AA_list
 from .iofunctions import validate_keyword

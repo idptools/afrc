@@ -8,6 +8,7 @@ specific polymer of a fixed length.
 """
 import numpy as np
 from .config import AA_list, RIJ_RMS_R0, RIJ_R0, RG_X0, RG_R0, P_OF_R_RESOLUTION
+from numpy.random import choice
 
 class PolymerObject:
     """
