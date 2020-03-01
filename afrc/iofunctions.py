@@ -2,8 +2,7 @@
 #        
 def validate_keyword(viable_keywords, input_keyword, keyword_name):
     """
-    General function that protects against poorly defined user input
-
+    General function that protects against poorly defined user input.
 
     Parameters
     ..........
@@ -24,7 +23,6 @@ def validate_keyword(viable_keywords, input_keyword, keyword_name):
     Returns
     ........
     Returns the lower-case cast keyword if valid, else raises an exception
-
 
     """
 

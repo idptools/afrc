@@ -21,13 +21,16 @@ class PolymerObject:
     def __init__(self, seq, p_of_r_resolution=P_OF_R_RESOLUTION):
         """
         Method to create Polymer Object. Seq should be a valid upper-case amino acid sequence and p_of_r_resolution
-        defines the resolution (in angstroms) to be used.
+        defines the resolution (in angstroms) to be used for distributions.
+
+        By default p_of_r_resolution is taken from the config.py file in the afrc package which defines the resolution
+        at 0.05 A.
 
         """
 
         # set sequence info
         self.nres = len(seq)
-        self.zero_length=False
+        self.zero_length = False
         self.RMS_Re_scaling = 0
         self.p_of_r_resolution = p_of_r_resolution
 
@@ -58,14 +61,21 @@ class PolymerObject:
         # the code to natively deal with zero-length strings rather than throwing
         # an exception.
         if len(seq) == 0:
-            self.zero_length=True
+            self.zero_length = True
             return
 
         # Compute the sequence-specific prefactors using the global lookup tables. This is
-        # just calculating the compositionally-weighted average value 
+        # just calculating the compositionally-weighted average value for the R0_RMS, R0 and X0
+        # prefactors. Recall that
+        # 
+        #  Root mean squared Re = N*R0_RMS^{0.5}
+        #  <Re> = N*R0^{0.5}
+        #  <Rg> = N*X0^{0.5}
         for AA in AA_list:
             self.__R0_RMS = self.__R0_RMS + (seq.count(AA)/float(self.nres))*RIJ_RMS_R0[AA]
             self.__R0 = self.__R0 + (seq.count(AA)/float(self.nres))*RIJ_R0[AA]
+
+            # note - we apply a +0.005 offset to each RG_X0 value
             self.__X0 = self.__X0 + (seq.count(AA)/float(self.nres))*(RG_X0[AA]+0.005)
 
         # and then compute the ensemble average RMS-Re and the absolute ensemble average Re
@@ -74,11 +84,13 @@ class PolymerObject:
         self.RMS_Re_scaling = self.__R0_RMS * np.power(self.nres,0.5)
         
 
+
     # .....................................................................................
     #        
     def get_end_to_end_distribution(self):
         """
-        Function that returns the end-to-end distribution as a 2D numpy array.y.
+        Function that returns the end-to-end distribution based on the analytical FRC
+        model.
 
         Returns
         -------
@@ -88,14 +100,16 @@ class PolymerObject:
         
         """
 
-        # if we have not yet  computed the end-to-end distance distribution...
+        # if we have not yet done it, computed the end-to-end distance distribution
         if self.__p_of_Re_R is False:
             self.__compute_end_to_end_distribution()
+
         return (self.__p_of_Re_R, self.__p_of_Re_P)
 
 
-    ##########################################################################################
-    ##
+
+    # .....................................................................................
+    #        
     def get_end_to_end_distribution_WLC(self):
         """
         Function that returns the end-to-end distribution assuming the WLC model for polypeptides
@@ -108,27 +122,55 @@ class PolymerObject:
         
         """
 
-        # if we have not yet  computed the WLC end-to-end distance distribution...
+        # if we have not yet computed the WLC end-to-end distance distribution do it now
         if self.__p_of_Re_R_WLC is False:
             self.__compute_end_to_end_distribution_WLC_model()
+
         return (self.__p_of_Re_R_WLC, self.__p_of_Re_P_WLC)
 
 
-    ##########################################################################################
-    ##
+
+    # .....................................................................................
+    #        
     def get_radius_of_gyration_distribution(self):
         """
+        Function that returns the radius of gyration distribution based on the analytical FRC
+        model.
+       
+
+        Returns
+        -------
+        2D Numpy array in which the first column is the distance (in angstroms) and the second
+        column is the probablity.
 
         """
 
-        # if we have not yet  computed the Rg distance distribution...
+        # if we have not yet computed the Rg distance distribution do so now
         if self.__p_of_Rg_R is False:
             self.__compute_Rg_distribution()
+
         return (self.__p_of_Rg_R, self.__p_of_Rg_P)
 
 
+
+    # .....................................................................................
+    #        
     def get_mean_end_to_end_distance(self, calculation_mode='scaling law'):
         """
+        Function that returns the mean end-to-end distance using the analytical 
+        FRC mode. Average can be computed using either the scalin law derivation
+        or using the mean of the distribution.
+
+        param
+        
+
+       
+
+        Returns
+        -------
+        2D Numpy array in which the first column is the distance (in angstroms) and the second
+        column is the probablity.
+
 
         """
 
@@ -142,6 +184,9 @@ class PolymerObject:
             return np.sum(a*b)
 
 
+
+    # .....................................................................................
+    #        
     def get_mean_end_to_end_distance_WLC(self):
         """
 
@@ -151,7 +196,8 @@ class PolymerObject:
 
 
 
-
+    # .....................................................................................
+    #        
     def get_mean_radius_of_gyration(self, calculation_mode='scaling law'):
         """
 
@@ -169,8 +215,9 @@ class PolymerObject:
             return np.sum(a*b)
 
       
-    ##########################################################################################
-    ##      
+
+    # .....................................................................................
+    #        
     def sample_end_to_end_distribution(self, dist_size=1000):
         """
         Function to randomly sample from the end-to-end distance distribution

@@ -40,10 +40,8 @@ class AnalyticalFRC:
     ----------    
     seq : str
        The amino acid sequence of the protein being examined. 
-
         
     """
-
 
 
     # .....................................................................................
@@ -78,7 +76,7 @@ class AnalyticalFRC:
 
         # set up what our P of R spacing will look like...
         if adaptable_P_res:
-            dmax=3.7*len(seq)
+            dmax = 3.7*len(seq)
             self.p_of_r_resolution = dmax/500.0
         else:
             self.p_of_r_resolution = P_OF_R_RESOLUTION
@@ -97,6 +95,11 @@ class AnalyticalFRC:
 
         No return value and totally stateless.
 
+        Parameters
+        ------------
+        seq : string
+            Amino acid sequence
+
         """
         for i in seq: 
             if i not in AA_list:
@@ -110,7 +113,9 @@ class AnalyticalFRC:
         """
 
         Internal function that limits matrix construction until its actually needed! The matrix in question
-        here is an [n x n] matrix of PolymerObjects for querying inter-residue distances.
+        here is an [n x n] matrix of PolymerObjects for querying inter-residue distances. This is computationally
+        a tad expensive to build, so this function employs a memoization approach whereby IF the matrix is needed
+        it is built, but only if
 
         """
 
@@ -153,7 +158,15 @@ class AnalyticalFRC:
         
         Parameters
         ----------
+        calculation_mode : string (default = 'scaling law')
+            A selector which must be equal to one of a specific set of options:
 
+            'distribution' - means the P(r) distribution is used to calculate average distances
+
+            'scaling law'  - means the derived scaling relationships are used to calculate the 
+                             average distance
+
+            If one of these is not provided then 
 
         Returns
         -------
@@ -330,6 +343,9 @@ class AnalyticalFRC:
         return self.full_seq_PO.get_mean_radius_of_gyration(calculation_mode)
 
 
+
+    # .....................................................................................
+    #        
     def get_mean_re(self, calculation_mode='scaling law'):
         """
         Returns the mean end-to-end distance (:math:`R_e`). This value can be the absolute
@@ -356,6 +372,8 @@ class AnalyticalFRC:
 
         return self.full_seq_PO.get_mean_end_to_end_distance(calculation_mode)
 
+
+
     # .....................................................................................
     #
     def get_mean_re_WLC(self):
@@ -363,7 +381,6 @@ class AnalyticalFRC:
         Returns the mean end-to-end distance (:math:`R_e`). As calculated from the Worm-like
         chain (WLC) model as defined by Zhou [Zhou2004]_. 
         
-
         Returns
         -------
         float
