@@ -2,16 +2,21 @@
 AFRC
 An analytical version of the Flory Random Coil for polypeptides, implemented using the rotational isomeric state approximation of Flory and Volkenstein and parameterized on the excluded volumed dihedral backbone maps
 """
-from setuptools import setup
+import sys
+from setuptools import setup, find_packages
 import versioneer
 
 short_description = __doc__.split("\n")
+
+# from https://github.com/pytest-dev/pytest-runner#conditional-requirement
+needs_pytest = {'pytest', 'test', 'ptr'}.intersection(sys.argv)
+pytest_runner = ['pytest-runner'] if needs_pytest else []
 
 try:
     with open("README.md", "r") as handle:
         long_description = handle.read()
 except:
-    long_description = "\n".join(short_description[2:]),
+    long_description = "\n".join(short_description[2:])
 
 
 setup(
@@ -32,6 +37,8 @@ setup(
     # Optional include package data to ship with your package
     # Comment out this line to prevent the files from being packaged with your software
     # Extend/modify the list to include/exclude other items as need be
+    include_package_data=True,
+    setup_requires=[] + pytest_runner,
     package_data={'afrc': ["data/*.dat"]
                   },
 
