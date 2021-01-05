@@ -25,15 +25,21 @@ class WormLikeChain:
 
         # set sequence info
         self.nres = len(seq)
-        self.zero_length = False
+        
+        # p_of_r_resolution defines the P(r) resolution in angstroms - i.e. basically
+        # the spacing between r values in a P(r) vs. r plot
         self.p_of_r_resolution = p_of_r_resolution
 
-        # set distribution info to false - these are calculated if/when needed
+        # set distribution info to false - these are calculated if/when needed. M
         self.__p_of_Re_R = False
         self.__p_of_Re_P = False
 
+        # this sets a flag that is useful for letting certain functions work when
+        # there's a chain length of 0
         if len(seq) == 0:
             self.zero_length = True
+        else:
+            self.zero_length = False
 
 
     # .....................................................................................
@@ -58,6 +64,8 @@ class WormLikeChain:
         """
 
         # if we have not yet computed the WLC end-to-end distance distribution do it now
+        # by having the code like this it means we only ever compute the distribution 
+        # once (wich, if the calculation is expensive is good)
         if self.__p_of_Re_R is False:
             self.__compute_end_to_end_distribution()
 
@@ -81,8 +89,8 @@ class WormLikeChain:
         return np.sum(a*b)
 
 
-    ##########################################################################################
-    ##
+    # .....................................................................................
+    #        
     def __compute_end_to_end_distribution(self):
         """
         Defines the end-to-end distribution based on the Worm-like chain (WLC) as defined by
