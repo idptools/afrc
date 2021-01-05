@@ -9,7 +9,6 @@ specific polymer of a fixed length.
 import numpy as np
 from .config import AA_list, RIJ_RMS_R0, RIJ_R0, RG_X0, RG_R0, P_OF_R_RESOLUTION
 from numpy.random import choice
-from .polymer_models import wlc
 
 class PolymerObject:
     """
@@ -80,11 +79,6 @@ class PolymerObject:
         # using the standard scaling law (R0 * N^{nu}) where nu=0.5 and R0 is calculated
         # based on composition
         self.RMS_Re_scaling = self.__R0_RMS * np.power(self.nres,0.5)
-
-        # build other polymer models
-        self.worm_like_chain = wlc.WormLikeChain(seq, p_of_r_resolution)
-        
-
 
     # .....................................................................................
     #        

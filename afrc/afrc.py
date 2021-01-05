@@ -7,6 +7,7 @@ import numpy as np
 from .polymer import PolymerObject
 from .config import P_OF_R_RESOLUTION, AA_list
 from .iofunctions import validate_keyword
+from .polymer_models import wlc
 
 
 class AFRCException(Exception):
@@ -88,8 +89,10 @@ class AnalyticalFRC:
         # finally define publically faicing access to other polymer models 
         self.other_models = {}
 
-        # finally we define other polymer models 
-        self.worm_like_chain = self.full_seq_PO.worm_like_chain
+        # finally we define other polymer models which are attached as their own
+        # class objects
+        self.worm_like_chain = wlc.WormLikeChain(seq, self.p_of_r_resolution)
+        
 
 
 
@@ -297,30 +300,6 @@ class AnalyticalFRC:
 
 
     # .....................................................................................
-    #
-    def get_re_distribution_WLC(self):        
-        """
-        Defines the end-to-end distribution based on the Worm-like chain (WLC) as defined by
-        Zhou [Zhou2004]_. 
-
-        This is a composition independent model for which the end-to-end distance depends
-        solely on the number of amino acids. It is included here as an additional reference 
-        model.
-
-        Returns
-        -------
-
-        tuple of arrays
-           A 2-pair tuple of numpy arrays where the first is the distance (in Angstroms) and 
-           the second array is the probability of that distance.
-
-        """
-
-        return self.full_seq_PO.get_end_to_end_distribution_WLC()
-
-
-
-    # .....................................................................................
     #        
     def get_mean_rg(self, calculation_mode='scaling law'):
         """
@@ -378,23 +357,6 @@ class AnalyticalFRC:
 
         return self.full_seq_PO.get_mean_end_to_end_distance(calculation_mode)
 
-
-
-    # .....................................................................................
-    #
-    def get_mean_re_WLC(self):
-        """
-        Returns the mean end-to-end distance (:math:`R_e`). As calculated from the Worm-like
-        chain (WLC) model as defined by Zhou [Zhou2004]_. 
-        
-        Returns
-        -------
-        float
-           Value equal to the mean radius of gyration.
-
-        """
-
-        return self.full_seq_PO.get_mean_end_to_end_distance_WLC()
         
 
     # .....................................................................................
