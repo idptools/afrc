@@ -85,6 +85,12 @@ class AnalyticalFRC:
         self.full_seq_PO = PolymerObject(seq, self.p_of_r_resolution)
         self.matrix=False
 
+        # finally define publically faicing access to other polymer models 
+        self.other_models = {}
+
+        # finally we define other polymer models 
+        self.worm_like_chain = self.full_seq_PO.worm_like_chain
+
 
 
     # .....................................................................................
@@ -270,7 +276,7 @@ class AnalyticalFRC:
 
     # .....................................................................................
     #
-    def get_re_distribution(self):        
+    def get_re_distribution(self, model='afrc'):        
         """
         Defines the end-to-end distance (Re) distribution using the standard end-to-end model (as in [Rubinstein2003]_). 
         

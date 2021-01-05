@@ -9,6 +9,7 @@ specific polymer of a fixed length.
 import numpy as np
 from .config import AA_list, RIJ_RMS_R0, RIJ_R0, RG_X0, RG_R0, P_OF_R_RESOLUTION
 from numpy.random import choice
+from .polymer_models import wlc
 
 class PolymerObject:
     """
@@ -40,9 +41,6 @@ class PolymerObject:
 
         self.__p_of_Rg_R = False
         self.__p_of_Rg_P = False
-
-        self.__p_of_Re_P_WLC = False
-        self.__p_of_Re_R_WLC = False
 
 
         ## *********************************
@@ -82,6 +80,9 @@ class PolymerObject:
         # using the standard scaling law (R0 * N^{nu}) where nu=0.5 and R0 is calculated
         # based on composition
         self.RMS_Re_scaling = self.__R0_RMS * np.power(self.nres,0.5)
+
+        # build other polymer models
+        self.worm_like_chain = wlc.WormLikeChain(seq, p_of_r_resolution)
         
 
 
@@ -105,28 +106,6 @@ class PolymerObject:
             self.__compute_end_to_end_distribution()
 
         return (self.__p_of_Re_R, self.__p_of_Re_P)
-
-
-
-    # .....................................................................................
-    #        
-    def get_end_to_end_distribution_WLC(self):
-        """
-        Function that returns the end-to-end distribution assuming the WLC model for polypeptides
-        as defined by 
-
-        Returns
-        -------
-        2D Numpy array in whichthe first column is the distance (in angstroms) and the second
-        column is the probablity.
-        
-        """
-
-        # if we have not yet computed the WLC end-to-end distance distribution do it now
-        if self.__p_of_Re_R_WLC is False:
-            self.__compute_end_to_end_distribution_WLC_model()
-
-        return (self.__p_of_Re_R_WLC, self.__p_of_Re_P_WLC)
 
 
 
@@ -183,16 +162,6 @@ class PolymerObject:
             [a,b] = self.get_end_to_end_distribution()
             return np.sum(a*b)
 
-
-
-    # .....................................................................................
-    #        
-    def get_mean_end_to_end_distance_WLC(self):
-        """
-
-        """
-        [a,b] = self.get_end_to_end_distribution_WLC()
-        return np.sum(a*b)
 
 
 
@@ -345,49 +314,6 @@ class PolymerObject:
         self.__p_of_Rg_R = p_val_rg_r
         self.__p_of_Rg_P = p_val_raw/sum(p_val_raw)
 
-    ##########################################################################################
-    ##
-    def __compute_end_to_end_distribution_WLC_model(self):
-        """
-        Defines the end-to-end distribution based on the Worm-like chain (WLC) as defined by
-        Zhou [BiDB79]_.
-
-
-
-        References
-        ----------
-
-        [BiDB79] Biskup, J.; Dayal, U.; Bernstein, P.A..: Synthesizing independent database schemas. In: ACM SIGMOD 1979 Int. Conf. On Management of Data Proceedings, S. 143-151.
-        """
-
-        Lp=3.0
-        Lc=self.nres*3.8
-
-        # use same pdist as we use for the new model...
-        p_dist = np.arange(0,3*(7*np.power(self.nres,0.5)), self.p_of_r_resolution)
-        p_val_raw = np.zeros(len(p_dist))
-
-        prefactor_A = 4*np.pi*np.power(3.0/(4*np.pi*Lp*Lc),1.5)
-        
-
-        def zeta(r):
-            return (1 - ((5*Lp/4*Lc) - 
-                         ((2*np.power(r,2))/(np.power(Lc,2))) +
-                         ((33*np.power(r,4))/(80*Lp*np.power(Lc,3))) +
-                         ((79*np.power(Lp,2))/(160*np.power(Lc,2))) +
-                         ((329*Lp*np.power(r,2))/(120*np.power(Lc,3))) -
-                         ((6799*np.power(r,4))/(1600*np.power(Lc,4))) +
-                         ((3441*np.power(r,6))/(2800*Lp*np.power(Lc,5))) -
-                         ((1089*np.power(r,8))/(12800*np.power(Lp,2)*np.power(Lc,6)))))
-            
-            
-        for i in range(0,len(p_dist)):
-            r = p_dist[i]            
-            p_val_raw[i] = prefactor_A*np.power(r,2)*np.exp(-3.0*(np.power(r,2))/(4*Lp*Lc))*zeta(r)
-            
-            
-        self.__p_of_Re_P_WLC = p_val_raw/np.sum(p_val_raw)
-        self.__p_of_Re_R_WLC = p_dist
 
 
     def compute_apparent_rms_bond_length(self):
