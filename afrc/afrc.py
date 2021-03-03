@@ -8,6 +8,7 @@ from .polymer import PolymerObject
 from .config import P_OF_R_RESOLUTION, AA_list
 from .iofunctions import validate_keyword
 from .polymer_models import wlc
+from scipy import integrate
 
 
 class AFRCException(Exception):
@@ -154,6 +155,43 @@ class AnalyticalFRC:
         """
         return len(self.seq)
 
+
+    def __validate_residue_index(self, R):
+        """
+        Internal function that validates a passed residue index actually makes sense
+
+        Parameters
+        -----------
+        R : int (or a type castable to integer)
+            An integer to be used for residue selection
+
+        Returns
+        ----------
+        int
+            If this works returns the same integer (cast to an integer and everything!), else
+            it will raises an exception 
+
+        Raises
+        ----------
+        AFRCException
+
+        """
+
+        try:
+            R = int(R)
+        except ValueError:
+            raise AFRCException('Could not convert residue [%s] to an integer' %(R))
+
+        if R < 0:
+            raise AFRCException('Residues %i cannot be under 0...'%(R))
+
+        if R >= len(self):
+            raise AFRCException('Residues %i cannot be over the chain length (%s)...'%(R, len(self)-1))
+
+        return R
+            
+            
+            
 
 
     # .....................................................................................
@@ -384,6 +422,10 @@ class AnalyticalFRC:
            the distances (in Angstroms) and colum two is the probablility.
            
         """                
+
+        R1 = self.__validate_residue_index(R1)
+        R2 = self.__validate_residue_index(R2)
+
         self.__build_matrix()
         return self.matrix[R1][R2].get_end_to_end_distribution()
 
@@ -422,6 +464,9 @@ class AnalyticalFRC:
         """
         calculation_mode = validate_keyword(['distribution','scaling law'], calculation_mode, 'calculation_mode')
 
+        R1 = self.__validate_residue_index(R1)
+        R2 = self.__validate_residue_index(R2)
+
 
         self.__build_matrix()
 
@@ -454,6 +499,9 @@ class AnalyticalFRC:
 
         """
         calculation_mode = validate_keyword(['distribution','scaling law'], calculation_mode, 'calculation_mode')
+
+        R1 = self.__validate_residue_index(R1)
+        R2 = self.__validate_residue_index(R2)
 
         self.__build_matrix()
 
@@ -505,6 +553,66 @@ class AnalyticalFRC:
         """
 
         return self.full_seq_PO.sample_end_to_end_distribution(dist_size=n)
+
+
+    # .....................................................................................
+    #
+    def get_contact_fraction(self, R1, R2, threshold):
+        """
+        Function that - given two residues (R1, and R2) and a distance threshold in Angstroms (threshold)
+        returns the faction of the time the center-of-mass distance between R1 and R2 is < threshold.
+
+        Practically, if we set threshold = 5, this gives you the expected contact fraction for two residues,
+        which is a useful normalization factor.
+
+        Parameters
+        -------------
+        R1 : int
+            First residue - must be between 0 and length of the polymer
+
+        R2 : int
+            Second residues - must also be between 0 and length of the polymer
+
+        threshold : float
+            A distance threshold in angstroms - can be a float or an int
+
+        Returns
+        ----------
+        float
+            Returns a single value between 0 and 1 that reports on the fraction
+            of the time residues R1 and R2 are close than $threshold angstroms
+            apart.
+
+        """
+
+        
+        # get the distribution of inter-residue distances 
+        interres_dist = self.get_interresidue_distance_distribution(R1, R2)
+
+        # build a list where of truth values where each element is true or false (true if val < thresh)
+        t = interres_dist[0] < threshold
+    
+        # find largest index from the truth vals
+        idx_max = max([i for i, x in enumerate(t) if x])
+    
+        # get xvals and y vals that we want to integrate over - i.e. we assume we're going to calculate
+        # the finite integral from 0 -> idx_max, so this is basically defining the region of a curve
+        # we're going to integrate over
+        xval = interres_dist[0][:idx_max]
+        yval = interres_dist[1][:idx_max]
+    
+        # dx which is prefactor for normalization
+        dx = xval[1]-xval[0]
+    
+        # integrate and normalize by dx so sums to 1 if thresh --> infinity
+        # note - modern scipy calls this function 'simpson' but for backwards 
+        # compactibility we'll go with simps here..
+        area_under_curve = integrate.simps(yval, xval)/dx
+
+        return area_under_curve
+
+
+        
 
 
 
