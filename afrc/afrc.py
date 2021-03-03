@@ -425,6 +425,10 @@ class AnalyticalFRC:
 
         R1 = self.__validate_residue_index(R1)
         R2 = self.__validate_residue_index(R2)
+ 
+        if R1 == R2:
+            return np.array([[0],[1.0]])
+           
 
         self.__build_matrix()
         return self.matrix[R1][R2].get_end_to_end_distribution()
@@ -467,6 +471,9 @@ class AnalyticalFRC:
         R1 = self.__validate_residue_index(R1)
         R2 = self.__validate_residue_index(R2)
 
+        if R1 == R2:
+            return 0.0
+
 
         self.__build_matrix()
 
@@ -504,6 +511,9 @@ class AnalyticalFRC:
         R2 = self.__validate_residue_index(R2)
 
         self.__build_matrix()
+
+        if R1 == R2:
+            return 0.0
 
         return self.matrix[R1][R2].get_mean_radius_of_gyration(calculation_mode)
         
@@ -589,11 +599,19 @@ class AnalyticalFRC:
         # get the distribution of inter-residue distances 
         interres_dist = self.get_interresidue_distance_distribution(R1, R2)
 
+        if R1 == R2:
+            return 1.0
+
         # build a list where of truth values where each element is true or false (true if val < thresh)
         t = interres_dist[0] < threshold
     
         # find largest index from the truth vals
-        idx_max = max([i for i, x in enumerate(t) if x])
+        all_vals = [i for i, x in enumerate(t) if x]
+
+        if len(all_vals) == 0:
+            return 0.0
+
+        idx_max = max(all_vals)
     
         # get xvals and y vals that we want to integrate over - i.e. we assume we're going to calculate
         # the finite integral from 0 -> idx_max, so this is basically defining the region of a curve
