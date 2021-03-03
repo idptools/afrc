@@ -422,6 +422,9 @@ class AnalyticalFRC:
         """
         calculation_mode = validate_keyword(['distribution','scaling law'], calculation_mode, 'calculation_mode')
 
+
+        self.__build_matrix()
+
         return self.matrix[R1][R2].get_mean_end_to_end_distance(calculation_mode)
 
 
@@ -451,6 +454,8 @@ class AnalyticalFRC:
 
         """
         calculation_mode = validate_keyword(['distribution','scaling law'], calculation_mode, 'calculation_mode')
+
+        self.__build_matrix()
 
         return self.matrix[R1][R2].get_mean_radius_of_gyration(calculation_mode)
         
