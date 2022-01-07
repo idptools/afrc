@@ -2,6 +2,9 @@ import numpy as np
 from afrc.config import P_OF_R_RESOLUTION
 from numpy.random import choice
 
+class WLCException:
+    pass
+
 class WormLikeChain:
     """
     This class generates an object that returns polymer statistics consistent with the Worm-like chain
@@ -11,7 +14,7 @@ class WormLikeChain:
 
     # .....................................................................................
     #        
-    def __init__(self, seq, p_of_r_resolution=P_OF_R_RESOLUTION):
+    def __init__(self, seq, p_of_r_resolution=P_OF_R_RESOLUTION, lp=3.0, aa_size=3.8):
         """
         Method to create Polymer Object. Seq should be a valid upper-case amino acid sequence and p_of_r_resolution
         defines the resolution (in angstroms) to be used for distributions.
@@ -19,12 +22,39 @@ class WormLikeChain:
         By default p_of_r_resolution is taken from the config.py file in the afrc package which defines the resolution
         at 0.05 A.
 
+        Parameters
+        -----------
+        seq : str
+            Amino acid sequence (used only to calculate number of residues)
+
+        p_of_r_resolution : float
+            Bin width for bulding probability distributions. In Angstroms.
+
+        lp : float
+            Persistence length. We use a default of 3 but 4 is also used a lot in the literature.
+
+        aa_size : float
+            Size of one amino acid (called 'b' in the literature). 3.8 is the generally acceptable 
+            value used.
+
         """
 
         # note that input validation is done in the AnalyticalFRC object constructor
 
         # set sequence info
         self.nres = len(seq)
+
+        # first cast to floats
+        self.lp = float(lp)
+        self.b = float(aa_size)
+
+        # also sanity check
+
+        if self.lp <= 0:
+            raise WLCException('Error, lp cannot be less than or equal to 0')
+
+        if self.b <= 0:
+            raise WLCException('Error, aa_size cannot be less than or equal to 0')
         
         # p_of_r_resolution defines the P(r) resolution in angstroms - i.e. basically
         # the spacing between r values in a P(r) vs. r plot
@@ -99,8 +129,8 @@ class WormLikeChain:
         """
 
         # define persistence length and contour length
-        Lp = 3.0
-        Lc = self.nres*3.8
+        Lp = self.lp
+        Lc = self.nres*self.b
 
         # use same pdist as was used for the parent AFRC model 
         p_dist = np.arange(0,3*(7*np.power(self.nres,0.5)), self.p_of_r_resolution)
