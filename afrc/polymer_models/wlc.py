@@ -8,7 +8,14 @@ class WLCException:
 class WormLikeChain:
     """
     This class generates an object that returns polymer statistics consistent with the Worm-like chain
-    model as implemented by Houx (2004)
+    model as implemented by Houx (2004).
+
+    This model should be basically identical to the O'Brien model (WormLikeChain2) but show better
+    numerical stability at large contour lengths. Unlike the O'Brien model this model does not
+    provide an estimation of the mean Rg.
+
+    Zhou, H.-X. (2004). Polymer models of protein stability, folding, and interactions. 
+    Biochemistry, 43(8), 2141–2154.
 
     """
 
@@ -16,11 +23,13 @@ class WormLikeChain:
     #        
     def __init__(self, seq, p_of_r_resolution=P_OF_R_RESOLUTION, lp=3.0, aa_size=3.8):
         """
-        Method to create Polymer Object. Seq should be a valid upper-case amino acid sequence and p_of_r_resolution
-        defines the resolution (in angstroms) to be used for distributions.
-
-        By default p_of_r_resolution is taken from the config.py file in the afrc package which defines the resolution
-        at 0.05 A.
+        Method to create a WormLikeChain Object. Seq should be a valid upper-case amino acid 
+        sequence and p_of_r_resolution defines the resolution (in angstroms) to be used for 
+        distributions.
+        
+        By default p_of_r_resolution is taken from the config.py file in the afrc package 
+        which defines the resolution at 0.05 A.
+        
 
         Parameters
         -----------
@@ -31,11 +40,13 @@ class WormLikeChain:
             Bin width for bulding probability distributions. In Angstroms.
 
         lp : float
-            Persistence length. We use a default of 3 but 4 is also used a lot in the literature.
+            Persistence length. We use a default of 3 but 4 is also used a lot in the 
+            literature.
 
         aa_size : float
-            Size of one amino acid (called 'b' in the literature). 3.8 is the generally acceptable 
-            value used.
+            Size of one amino acid (called 'b' in the literature). 3.8 is the generally
+            acceptable value used.
+            
 
         """
 
@@ -77,8 +88,7 @@ class WormLikeChain:
     def get_end_to_end_distribution(self):
 
         """
-        Defines the end-to-end distribution based on the Worm-like chain (WLC) as defined by
-        Zhou [Zhou2004]_. 
+        Defines the end-to-end distribution based on the Worm-like chain (WLC).
 
         This is a composition independent model for which the end-to-end distance depends
         solely on the number of amino acids. It is included here as an additional reference 
@@ -108,6 +118,8 @@ class WormLikeChain:
         """
         Returns the mean end-to-end distance (:math:`R_e`). As calculated from the Worm-like
         chain (WLC) model as defined by Zhou [Zhou2004]_. 
+
+        Note mean here is calculated by integrating over P(r) vs r.
         
         Returns
         -------
@@ -116,8 +128,29 @@ class WormLikeChain:
 
         """
         [a,b] = self.get_end_to_end_distribution()
+
         return np.sum(a*b)
 
+
+    # .....................................................................................
+    #        
+    def get_root_mean_squared_end_to_end_distance(self):
+        """
+        Returns the mean end-to-end distance (:math:`R_e`). As calculated from the Worm-like
+        chain (WLC) model as defined by Zhou [Zhou2004]_. 
+
+        Note mean here is calculated by taking the square root after integrating over P(r) vs r^2.
+        
+        Returns
+        -------
+        float
+           Value equal to the mean radius of gyration.
+
+        """
+
+
+        [a,b] = self.get_end_to_end_distribution()
+        return np.sqrt(np.sum(b*np.power(a,2)))
 
     # .....................................................................................
     #        

@@ -2,13 +2,19 @@ import numpy as np
 from afrc.config import P_OF_R_RESOLUTION
 from numpy.random import choice
 
-class WLC2Exception:
+class WLC2Exception(Exception):
     pass
 
 class WormLikeChain2:
     """
     This class generates an object that returns polymer statistics consistent with the Worm-like chain
-    model as implemented by Houx (2004)
+    model as implemented by O'Brien. Provides mean Re, mean Rg, and Re distribution.
+
+
+    [1] O’Brien, E. P., Morrison, G., Brooks, B. R., & Thirumalai, D. (2009). 
+    How accurate are polymer models in the analysis of Forster resonance 
+    energy transfer experiments on proteins? The Journal of Chemical Physics, 
+    130(12), 124903.
 
     """
 
@@ -39,7 +45,8 @@ class WormLikeChain2:
 
         """
 
-        raise WLC2Exception("THIS IS NOT WORKING RIGHT BUT I DON'T KNOW WHY ARGHHHHHHHHHHH")
+        if len(seq) < lp:
+            raise WLC2Exception('Passed sequence cannot be shorter than the persistence length')
 
         # set sequence info
         self.nres = len(seq)
@@ -57,13 +64,18 @@ class WormLikeChain2:
             raise WLCException('Error, aa_size cannot be less than or equal to 0')
         
         Lc = self.b*self.nres
+
         # next calculate params as defined by O'Brien et al
+        
         self.alpha = (3*Lc) / (4*self.lp)
+        
         self.C2 = 1/(2*self.lp)
 
         t1 = np.power(np.pi, 3/2)
         t2 = np.exp(-self.alpha)
         t3 = np.power(self.alpha,-3/2)
+
+        # warning - if 
         t4 = 3*np.power(self.alpha,-1)
         t5 = (15/4)*np.power(self.alpha,-2)
 
@@ -120,7 +132,9 @@ class WormLikeChain2:
     def get_mean_end_to_end_distance(self):
         """
         Returns the mean end-to-end distance (:math:`R_e`). As calculated from the Worm-like
-        chain (WLC) model as defined by Zhou [Zhou2004]_. 
+        chain (WLC) model as defined by O'brien et al.
+
+        Note mean here is calculated by integrating over P(r) vs r.
         
         Returns
         -------
@@ -129,7 +143,30 @@ class WormLikeChain2:
 
         """
         [a,b] = self.get_end_to_end_distribution()
+
         return np.sum(a*b)
+
+
+    # .....................................................................................
+    #        
+    def get_root_mean_squared_end_to_end_distance(self):
+        """
+        Returns the mean end-to-end distance (:math:`R_e`). As calculated from the Worm-like
+        chain (WLC) model as defined by O'brien et al.
+
+        Note mean here is calculated by taking the square root after integrating over P(r) vs r^2.
+        
+        Returns
+        -------
+        float
+           Value equal to the mean radius of gyration.
+
+        """
+
+
+        [a,b] = self.get_end_to_end_distribution()
+        return np.sqrt(np.sum(b*np.power(a,2)))
+
 
 
     # .....................................................................................
@@ -147,7 +184,9 @@ class WormLikeChain2:
         
 
         # use same pdist as was used for the parent AFRC model 
-        p_dist = np.arange(0,3*(7*np.power(self.nres,0.5)), self.p_of_r_resolution)
+        prefactor = np.min((np.max([4,Lp]),10))*0.5
+
+        p_dist = np.arange(0, prefactor*(7*np.power(self.nres,0.5)), self.p_of_r_resolution)
 
         # initialize an empty array
         p_val_raw = np.zeros(len(p_dist))
@@ -161,12 +200,17 @@ class WormLikeChain2:
             r = p_dist[i]            
             r2 = np.power(r,2)
             RoL2 = np.power(r/Lc,2)
-            
 
-            LHS = PREFACT*r2 /(Lc*np.power(1-RoL2,9/2))
+            LHS = (PREFACT*r2) / (Lc*np.power((1-RoL2),9/2))
             RHS = (-3*Lc) / (4*Lp*(1-RoL2))
 
-            p_val_raw[i] = LHS*np.exp(RHS)
+            p_r = LHS*np.exp(RHS)
+
+            if np.isnan(p_r):
+                p_val_raw[i] = 0
+            else:
+                p_val_raw[i] = p_r
+
             
             
         # finally normalize so sums to 1.0 and assign to the object
@@ -179,12 +223,15 @@ class WormLikeChain2:
     def get_mean_rg(self):
         """
         Returns the mean radius of gyration (:math:`R_g`) as defined by 
-        O'brien et al in [1]
+        O'brien et al in [1]. NOTE it doesn't explicitly say it in the 
+        paper, but we're assuming this is actually Rg^{2} so this returns
+        the square root of the Rg defined in table 1 (WLC row).
 
 
         [1] O’Brien, E. P., Morrison, G., Brooks, B. R., & Thirumalai, D. (2009). 
         How accurate are polymer models in the analysis of Forster resonance 
-        energy transfer experiments on proteins? The Journal of Chemical Physics, 130(12), 124903.
+        energy transfer experiments on proteins? The Journal of Chemical Physics, 
+        130(12), 124903.
 
         Returns
         -------
@@ -194,8 +241,7 @@ class WormLikeChain2:
         """
 
         Lc = self.nres*self.b
+        C2 = self.C2
+        Lp = self.lp
                                                                                         
-
-                                                                                              
-
-        return Lc/(6*self.C2) + 1/(4*np.power(self.C2,2)) +  1/(Lc*4*np.power(self.C2,3)) - (1-np.exp(-Lc/self.lp))/(8*np.power(self.C2,4)*np.power(Lc,2))
+        return np.sqrt(Lc/(6*C2) + 1/(4*np.power(C2,2)) +  1/(Lc*4*np.power(C2, 3)) - (1 - np.exp(-Lc/Lp))/(8*np.power(C2, 4)*np.power(Lc, 2)))
