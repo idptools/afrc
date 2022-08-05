@@ -7,8 +7,14 @@ class SAWException:
 
 class SAW:
     """
-    This class generates an object that returns polymer statistics consistent with the SAW
-    model as implemented by 109,114,139. Code written by Jhullian Alston.
+    This class generates an object that returns polymer statistics consistent with the Worm-like chain
+    model as implemented by O'Brien. This model was developed by Jhulian 'J' Alston.
+
+    [1] O’Brien, E. P., Morrison, G., Brooks, B. R., & Thirumalai, D. (2009). 
+    How accurate are polymer models in the analysis of Forster resonance 
+    energy transfer experiments on proteins? The Journal of Chemical Physics, 
+    130(12), 124903.
+
 
     """
 
@@ -16,12 +22,13 @@ class SAW:
     #        
     def __init__(self, seq, p_of_r_resolution=P_OF_R_RESOLUTION):
         """
-        Method to create Polymer Object. Seq should be a valid upper-case amino acid sequence and p_of_r_resolution
-        defines the resolution (in angstroms) to be used for distributions.
-
-        By default p_of_r_resolution is taken from the config.py file in the afrc package which defines the resolution
-        at 0.05 A.
-
+        Method to create SAW (self-avoiding walk) object. Seq should be a valid upper-case 
+        amino acid sequence and p_of_r_resolution defines the resolution (in angstroms) to 
+        be used for distributions.
+        
+        By default p_of_r_resolution is taken from the config.py file in the afrc package which 
+        defines the resolution at 0.05 A.
+        
         Parameters
         -----------
         seq : str
@@ -33,14 +40,12 @@ class SAW:
 
         """
 
+        # constants derived by 
         self.a = 3.67853
         self.b = 1.23152
 
         self.theta = 0.3
         self.delta = 2.5
-
-
-        # note that input validation is done in the AnalyticalFRC object constructor
 
         # set sequence info
         self.nres = len(seq)
@@ -137,12 +142,13 @@ class SAW:
         # initialize an empty array
         p_val_raw = np.zeros(len(p_dist))
         
-        #define SAW normalization factors as defined by https://aip.scitation.org/doi/10.1063/1.3082151
+        # define SAW normalization factors as defined by 
+        # https://aip.scitation.org/doi/10.1063/1.3082151
         a = self.a
         b = self.b
 
-        theta = 0.3
-        delta = 2.5
+        theta = self.theta
+        delta = self.delta
 
         # for each possible value of 'r'
         for i in range(0,len(p_dist)):
