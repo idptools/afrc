@@ -21,11 +21,13 @@ class AFRCException(Exception):
             
 class AnalyticalFRC:
     """
-    The AnalyticalFRC object is the only user-facing object that the AFRC package provides. All functionality
-    is associated with function called from this object, and the object itself is instantiated with a single
-    amino acid string. For all intents and purposes, one can think of as an *AnalyticalFRC* object as holding
-    one protein sequence and providing an interface to ask specific types of polymer questions.
-
+    The AnalyticalFRC object is the main user-facing object that the AFRC 
+    package provides. All functionality is associated with function called 
+    from this object, and the object itself is instantiated with a single    
+    amino acid string. For all intents and purposes, one can think of as 
+    an *AnalyticalFRC* object as holding one protein sequence and providing 
+    an interface to ask specific types of polymer questions.
+    
     .. code-block:: python
 
           from afrc import AnalyticalFRC
@@ -33,15 +35,12 @@ class AnalyticalFRC:
     
     Note
     ----
-    Distributions and parameters are only calculate as requested, such that initializing an Analytical FRC 
-    object is a cheap operation. However, operations relating to intramolecular distances (``get_distance_map()``, 
+    Distributions and parameters are only calculate as requested, such that 
+    initializing an Analytical FRC  object is a cheap operation. However, 
+    operations relating to intramolecular distances (``get_distance_map()``,     
     ``get_internal_scaling()`` etc. are more computationally expensive.
 
 
-    Attributes
-    ----------    
-    seq : str
-       The amino acid sequence of the protein being examined. 
         
     """
 
@@ -50,21 +49,23 @@ class AnalyticalFRC:
     #
     def __init__(self, seq, adaptable_P_res=False):
         """
-        Constructor for an AFRC object which can be queried to obtain varies parameters and statistics.
+        Constructor for an AFRC object which can be queried to obtain varies 
+        parameters and statistics.
 
         Parameters
         ----------
         seq : str
-            Amino acid sequence for the protein of interest (case insensitive). If this is an invalid string 
-            it will raise an AFRCException.
-
+            Amino acid sequence for the protein of interest (case insensitive). 
+            If this is an invalid string it will raise an AFRCException.
+            
         adaptable_P_res : Bool (False)
-           Sets the resolution used for generating probability distributions. By default this is assigned to
-           a fixed value (0.05 A). However, if this is set to True a sequence-specific adaptable resolution
-           is used and calculated as :math:`d_{max} / 500.00` (where :math:`d_{max}` reflects the contour 
-           length of the polypeptide and is defined as :math:`3.7n`.
-           
-        
+           Sets the resolution used for generating probability distributions. 
+           By default this is assigned to a fixed value (0.05 A). However, if 
+           this flag set to True a sequence-specific adaptable resolution           
+           is used and calculated as :math:`d_{max} / 500.00` (where :math:`d_{max}` 
+           reflects the contour length of the polypeptide and is defined as 
+           :math:`3.7n`.
+                              
         """
 
         try:
@@ -83,7 +84,6 @@ class AnalyticalFRC:
         else:
             self.p_of_r_resolution = P_OF_R_RESOLUTION
 
-
         self.full_seq_PO = PolymerObject(seq, self.p_of_r_resolution)
         self.matrix=False
 
@@ -101,7 +101,8 @@ class AnalyticalFRC:
     #
     def __check_seq_is_valid(self, seq):
         """
-        Helper function that ensures the passed sequence contains ONLY valid amino acids (upper-case).
+        Helper function that ensures the passed sequence contains ONLY 
+        valid amino acids (upper-case).
 
         No return value and totally stateless.
 
@@ -113,7 +114,7 @@ class AnalyticalFRC:
         """
         for i in seq: 
             if i not in AA_list:
-                raise AFRCException('Passed amino acid sequence contains non-standard amino acids [%s]' %(i))
+                raise AFRCException(f'Passed amino acid sequence contains non-standard amino acids [{i}]')
 
 
 
@@ -122,21 +123,31 @@ class AnalyticalFRC:
     def __build_matrix(self):
         """
 
-        Internal function that limits matrix construction until its actually needed! The matrix in question
-        here is an [n x n] matrix of PolymerObjects for querying inter-residue distances. This is computationally
-        a tad expensive to build, so this function employs a memoization approach whereby IF the matrix is needed
+        Internal function that limits matrix construction until its actually needed! 
+        The matrix in question here is an [n x n] matrix of PolymerObjects for querying 
+        inter-residue distances. This is computationally a tad expensive to build, so this 
+        function employs a memoization approach whereby IF the matrix is needed
         it is built, but only if
 
         """
 
+        # if the matrix is not yet built
         if self.matrix is False:
             self.matrix = []
+
+            ## the first set of for-loops initialize a matrix of lists
+            # for each residue in the sequence
             for i in range(0, len(self.seq)):
                 row = []
+
+                # for each second residue in the sequence
                 for j in range(0, len(self.seq)):
                     row.append(0)
+                    
                 self.matrix.append(row)
-            
+
+            ## the second set of for-loops defines the inter-residue
+            ## distance for each unique pari of residues
             for i in range(0, len(self.seq)):
                 for j in range(i, len(self.seq)):
                     subseq = self.seq[i:j]                
@@ -189,8 +200,6 @@ class AnalyticalFRC:
             raise AFRCException('Residues %i cannot be over the chain length (%s)...'%(R, len(self)-1))
 
         return R
-            
-            
             
 
 
