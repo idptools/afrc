@@ -1,6 +1,12 @@
 """
 AFRC
-An analytical version of the Flory Random Coil for polypeptides, implemented using the rotational isomeric state approximation of Flory and Volkenstein and parameterized on the excluded volumed dihedral backbone maps
+An analytical version of the Flory Random Coil for polypeptides, implemented using the rotational isomeric state 
+approximation of Flory and Volkenstein and parameterized on the excluded volumed dihedral backbone maps.
+
+Copyright Alex Holehouse 2018-2022 (holehouselab.com).
+
+For any questions please contact Alex.
+
 """
 
 # Add imports here
