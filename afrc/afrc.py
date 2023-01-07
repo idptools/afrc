@@ -348,20 +348,21 @@ class AnalyticalFRC:
 
     # .....................................................................................
     #        
-    def get_mean_rg(self, calculation_mode='scaling law'):
+    def get_mean_rg(self, calculation_mode='distribution'):
         """
         Returns the mean radius of gyration (:math:`R_g`) as calculated from the 
         :math:`R_g` distribution.
 
         Paramaters
-        ...........
+        ...........---
 
 
-        calculation_mode : string (keyword)
+        calculation_mode : str 
              calculation_mode defines the mode in which the average is calculated, and can be 
              set to either 'scaling law' (default) or 'distribution'. If 'distribution' is used
              then the complete Rg distribution is used to calculate the expected value. If the
-             'scaling law' is used then the standard Rg = R0 * N^{0.5} is used.        
+             'scaling law' is used then the standard Rg = R0 * N^{0.5} is used. 
+       
 
         Returns
         -------
