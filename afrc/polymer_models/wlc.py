@@ -8,7 +8,7 @@ class WLCException:
 class WormLikeChain:
     """
     This class generates an object that returns polymer statistics consistent with the Worm-like chain
-    model as implemented by Houx (2004).
+    model as implemented by Zhou (2004).
 
     This model should be basically identical to the O'Brien model (WormLikeChain2) but show better
     numerical stability at large contour lengths. Unlike the O'Brien model this model does not
@@ -60,7 +60,6 @@ class WormLikeChain:
         self.b = float(aa_size)
 
         # also sanity check
-
         if self.lp <= 0:
             raise WLCException('Error, lp cannot be less than or equal to 0')
 
@@ -103,11 +102,7 @@ class WormLikeChain:
 
         """
 
-        # if we have not yet computed the WLC end-to-end distance distribution do it now
-        # by having the code like this it means we only ever compute the distribution 
-        # once (wich, if the calculation is expensive is good)
-        if self.__p_of_Re_R is False:
-            self.__compute_end_to_end_distribution()
+        self.__compute_end_to_end_distribution()
 
         return (self.__p_of_Re_R, self.__p_of_Re_P)
 

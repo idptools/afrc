@@ -7,8 +7,9 @@ class SAWException:
 
 class SAW:
     """
-    This class generates an object that returns polymer statistics consistent with the Worm-like chain
-    model as implemented by O'Brien. This model was developed by Jhulian 'J' Alston.
+    This class generates an object that returns polymer statistics consistent with a 
+    self-avoiding random walk (SAW). This model was developed by Jhulian 'J' Alston,
+    and is based on the reference implementation by O'Brein et al [1]
 
     [1] O’Brien, E. P., Morrison, G., Brooks, B. R., & Thirumalai, D. (2009). 
     How accurate are polymer models in the analysis of Forster resonance 
@@ -68,7 +69,7 @@ class SAW:
 
     # .....................................................................................
     #        
-    def get_end_to_end_distribution(self, prefactor=0.5):
+    def get_end_to_end_distribution(self, prefactor=5.5):
         """
         Defines the end-to-end distribution based on the SAW as defined by
         https://aip.scitation.org/doi/10.1063/1.3082151. 
@@ -76,6 +77,8 @@ class SAW:
         This is a composition independent model for which the end-to-end distance depends
         solely on the number of amino acids. It is included here as an additional reference 
         model.
+
+        By default this uses a prefactor of 5.5 A (0.55 nanometers).
 
         Parameters
         ------------
@@ -92,21 +95,20 @@ class SAW:
 
         """
 
-        # if we have not yet computed the SAW end-to-end distance distribution do it now
-        # by having the code like this it means we only ever compute the distribution 
-        # once (wich, if the calculation is expensive is good)
-        if self.__p_of_Re_R is False:
-            self.__compute_end_to_end_distribution(prefactor)
+        self.__compute_end_to_end_distribution(prefactor)
 
         return (self.__p_of_Re_R, self.__p_of_Re_P)
 
 
     # .....................................................................................
     #        
-    def get_mean_end_to_end_distance(self, prefactor=0.5):
+    def get_mean_end_to_end_distance(self, prefactor=5.5):
         """
-        Returns the mean end-to-end distance (:math:`R_e`). As calculated from the SAW model as defined 
+        Returns the mean end-to-end distance (:math:`R_e`). As calculated 
+        from the SAW model as defined 
         https://aip.scitation.org/doi/10.1063/1.3082151. 
+
+        By default this uses a prefactor of 5.5 A (0.55 nanometers).
         
         Returns
         -------
@@ -120,7 +122,29 @@ class SAW:
         
         return np.sqrt(np.sum(np.power(a,2)* b))
 
+    # .....................................................................................
+    #        
+    def get_mean_radius_of_gyration(self, prefactor=5.5):
+        """
+        
+        
+        Returns
+        -------
+        float
+           Value equal to the mean radius of gyration.
 
+        """
+        gamma = 1.1615
+        nu=0.589
+        top = gamma*(gamma + 1)
+        bottom = 2*(gamma + 2*nu)*(gamma + 2*nu + 1)
+
+        Ree = self.get_mean_end_to_end_distance(prefactor=prefactor)
+
+        return np.sqrt(Ree**2*(top/bottom))
+
+
+    
     # .....................................................................................
     #        
     def __compute_end_to_end_distribution(self, prefactor):

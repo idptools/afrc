@@ -307,7 +307,7 @@ class AnalyticalFRC:
 
     # .....................................................................................
     #            
-    def get_rg_distribution(self):        
+    def get_radius_of_gyration_distribution(self):        
         """
         Defines the radius of gyration (:math:`R_g`) distribution using equation (3) from [Lhuillier1988]_. 
 
@@ -326,7 +326,7 @@ class AnalyticalFRC:
 
     # .....................................................................................
     #
-    def get_re_distribution(self, model='afrc'):        
+    def get_end_to_end_distribution(self, model='afrc'):        
         """
         Defines the end-to-end distance (Re) distribution using the standard end-to-end model (as in [Rubinstein2003]_). 
         
@@ -348,7 +348,7 @@ class AnalyticalFRC:
 
     # .....................................................................................
     #        
-    def get_mean_rg(self, calculation_mode='distribution'):
+    def get_mean_radius_of_gyration(self, calculation_mode='distribution'):
         """
         Returns the mean radius of gyration (:math:`R_g`) as calculated from the 
         :math:`R_g` distribution.
@@ -379,7 +379,7 @@ class AnalyticalFRC:
 
     # .....................................................................................
     #        
-    def get_mean_re(self, calculation_mode='scaling law'):
+    def get_mean_end_to_end_distance(self, calculation_mode='scaling law'):
         """
         Returns the mean end-to-end distance (:math:`R_e`). This value can be the absolute
         mean end-to-end distance or the root-mean-sequence end-to-end distance.
@@ -405,7 +405,63 @@ class AnalyticalFRC:
 
         return self.full_seq_PO.get_mean_end_to_end_distance(calculation_mode)
 
-        
+    # .....................................................................................
+    #        
+    def get_mean_hydrodynamic_radius(self, calculation_mode='kirkwood-riseman'):
+        """
+        Returns the average hydrodynamic radius, calculated either useing the Kirkwood-Riseman
+        equation or using the empirical Rg-to-Rh conversion scheme developed by Nygaard et al.
+
+        Parameters
+        ----------
+
+        calculation_mode : string (keyword)
+            Defines how the hydrodynamic radius should be calculated. Must be one of either
+            "kirkwood-riseman" or "nygaard".
+
+        Returns
+        -------
+        float
+           Value equal to the average end-to-end distance (as defined by ``mode``).
+
+        References
+        -------------
+        [1] Nygaard M, Kragelund BB, Papaleo E, Lindorff-Larsen K. An Efficient
+        Method for Estimating the Hydrodynamic Radius of Disordered Protein
+        Conformations. Biophys J. 2017;113: 550–557.
+
+        [2] Kirkwood, J. G., & Riseman, J. (1948). The Intrinsic Viscosities
+        and Diffusion Constants of Flexible Macromolecules in Solution.
+        The Journal of Chemical Physics, 16(6), 565–573.
+
+
+        """
+
+        calculation_mode = validate_keyword(['kirkwood-riseman','nygaard'], calculation_mode, 'calculation_mode')
+
+        if calculation_mode == 'nygaard':
+
+            alpha1 = 0.216
+            alpha2 = 4.06
+            alpha3 = 0.821
+
+            # first compute the rg
+            rg = self.get_mean_radius_of_gyration()
+
+            n = len(self)
+
+            # precompute
+            N_033 = np.power(n, 0.33)
+            N_060 = np.power(n, 0.60)
+
+            Rg_over_Rh = ((alpha1*(rg - alpha2*N_033)) / (N_060 - N_033)) + alpha3
+
+            return (1/Rg_over_Rh)*rg
+
+        elif calculation_mode == 'kirkwood-riseman':
+
+            DM = self.get_distance_map()
+            return 1/np.mean(1/DM[DM!=0])        
 
     # .....................................................................................
     #
@@ -530,7 +586,7 @@ class AnalyticalFRC:
 
     # .....................................................................................
     #
-    def sample_rg_distribution(self,n=1000):
+    def sample_radius_of_gyration_distribution(self,n=1000):
         """
         Subsamples from the :math:`R_g` distirbution to generate an uncorrelated 'trajectory' 
         of points. Useful for creating a sized-match sample to compare with simulation
@@ -554,7 +610,7 @@ class AnalyticalFRC:
 
     # .....................................................................................
     #
-    def sample_re_distribution(self,n=1000):
+    def sample_end_to_end_distribution(self,n=1000):
         """
         Subsamples from the end-to-end distance distribution to generate an uncorrelated 
         'trajectory' of points. Useful for creating a sized-match sample to compare with 
@@ -573,6 +629,40 @@ class AnalyticalFRC:
         """
 
         return self.full_seq_PO.sample_end_to_end_distribution(dist_size=n)
+
+    
+    # .....................................................................................
+    #
+    def sample_inter_residue_distance_distribution(self, R1, R2, n=1000):
+        """
+        Subsamples from the end-to-end distance distribution to generate an uncorrelated 
+        'trajectory' of points. Useful for creating a sized-match sample to compare with 
+        simulation data.
+
+        Parameters
+        ----------
+        n : int
+           Number of random values to sample (default = 1000)
+        
+        Returns
+        -------
+        np.ndarray
+           Returns an n-length array with n independent values (floats)
+
+        """
+        
+        # construct the internal matrix of polymers
+        self.__build_matrix()
+
+        # make sure R1 is the bigger of the 2 
+        if R1 > R2:
+            pass
+        else:
+            tmp = R1
+            R1 = R2
+            R2 = tmp
+
+        return self.matrix[R2][R1].sample_end_to_end_distribution(dist_size=n)
 
 
     # .....................................................................................

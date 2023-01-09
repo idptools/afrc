@@ -103,7 +103,7 @@ class WormLikeChain2:
 
         """
         Defines the end-to-end distribution based on the Worm-like chain (WLC) as defined by
-        Zhou [Zhou2004]_. 
+        O'Brient et al.
 
         This is a composition independent model for which the end-to-end distance depends
         solely on the number of amino acids. It is included here as an additional reference 
@@ -116,13 +116,15 @@ class WormLikeChain2:
            A 2-pair tuple of numpy arrays where the first is the distance (in Angstroms) and 
            the second array is the probability of that distance.
 
-        """
+        References
+        -----------
+        [1] O’Brien, E. P., Morrison, G., Brooks, B. R., & Thirumalai, D. (2009). 
+        How accurate are polymer models in the analysis of Forster resonance 
+        energy transfer experiments on proteins? The Journal of Chemical Physics, 
+        130(12), 124903.
 
-        # if we have not yet computed the WLC end-to-end distance distribution do it now
-        # by having the code like this it means we only ever compute the distribution 
-        # once (wich, if the calculation is expensive is good)
-        if self.__p_of_Re_R is False:
-            self.__compute_end_to_end_distribution()
+
+        """
 
         return (self.__p_of_Re_R, self.__p_of_Re_P)
 
@@ -134,7 +136,7 @@ class WormLikeChain2:
         Returns the mean end-to-end distance (:math:`R_e`). As calculated from the Worm-like
         chain (WLC) model as defined by O'brien et al.
 
-        Note mean here is calculated by integrating over P(r) vs r.
+        Note, the mean here is calculated by integrating over P(r) vs r.
         
         Returns
         -------
@@ -220,10 +222,10 @@ class WormLikeChain2:
 
     # .....................................................................................
     #        
-    def get_mean_rg(self):
+    def get_mean_radius_of_gyration(self):
         """
         Returns the mean radius of gyration (:math:`R_g`) as defined by 
-        O'brien et al in [1]. NOTE it doesn't explicitly say it in the 
+        O'Brien et al in [1]. NOTE it doesn't explicitly say it in the 
         paper, but we're assuming this is actually Rg^{2} so this returns
         the square root of the Rg defined in table 1 (WLC row).
 

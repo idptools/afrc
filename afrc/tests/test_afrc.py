@@ -18,6 +18,6 @@ def test_mean_rg():
     protein = afrc.AnalyticalFRC(s)
 
     # check mean rg code
-    assert protein.get_mean_rg() - 29.341888777603817 < 0.001
-    assert protein.get_mean_rg(calculation_mode='scaling law') - 29.341888777603817 < 0.001
-    assert protein.get_mean_rg(calculation_mode='distribution') - 30.788294820233368 < 0.001
+    assert protein.get_mean_radius_of_gyration() - 30.788294820233368 < 0.001
+    assert protein.get_mean_radius_of_gyration(calculation_mode='scaling law') - 29.341888777603817 < 0.001
+    assert protein.get_mean_radius_of_gyration(calculation_mode='distribution') - 30.788294820233368 < 0.001
