@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.abspath('../.'))
 # -- Project information -----------------------------------------------------
 
 project = 'AFRC'
-copyright = ("2019, Alex Holehouse.AFRC was developed in the Pappu Lab. THIS IS A PRELIMINARY VERSION!")
+copyright = ("2019 - 2023, Holehouse Lab")
 author = 'Alex Holehouse'
 
 # The short X.Y version
