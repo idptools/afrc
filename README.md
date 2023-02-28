@@ -6,6 +6,7 @@ afrc
 
 `afrc` is a Python package that implements an analytical version of the Flory Random Coil (FRC) for polypeptides. This analytical solution is based on the rotational isomeric state approximation of Flory and Volkenstein and parameterized on the excluded volumed dihedral backbone maps. It provides an interface into sequence-specific polymeric properties (i.e. intra-molecular distances) expected for a given sequence behaves like a polymer in a true theta solvent. In this way it provides a convenient reference state though which real simulations or experiments can be normalized against.
 
+
 ### Installation
 To install `afrc` 
 
@@ -40,7 +41,7 @@ For full documentation build the docs in `/docs`.
 
 ### Copyright
 
-Copyright (c) 2019-2021, Alex Holehouse
+Copyright (c) 2019-2023 Holehouse Lab
 
 
 #### Acknowledgements
