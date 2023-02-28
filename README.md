@@ -37,7 +37,7 @@ There is a single user-facing object that is built from the `afrc` package which
 	
 
 ### Documentation
-For full documentation build the docs in `/docs`.
+For full documentation, build the docs in `/docs`.
 
 ### Copyright
 
