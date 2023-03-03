@@ -3,8 +3,44 @@ afrc
 [//]: # (Badges)
 [![Documentation Status](https://readthedocs.org/projects/afrc/badge/?version=latest)](https://afrc.readthedocs.io/en/latest/?badge=latest)
 
-`afrc` is a Python package that implements an analytical version of the Flory Random Coil (i.e. the AFRC) for polypeptides. 
+![AFRC logo](afrc_logo.png)
 
+## About
+#### What?
+`afrc` is a Python package that implements an analytical version of the Flory Random Coil (i.e. the AFRC) for polypeptides. By way of an example, if you have a protein sequence, one can calculate a variety of polymeric properties simply by passing in the sequence:
+
+
+	from afrc import AnalyticalFRC
+	
+	# creat an AnalyticalFRC object
+	P = AnalyticalFRC('MEEPQSDPSVEPPLSQETFSDLWKLLPENNVLSPLPSQAMDDLMLSPDDI')
+	
+	## from this object you can calculate various polymeric properties
+	## directly without any additional information
+	
+	# get the ensemble-average radius of gyration
+	mean_rg = P.get_mean_radius_of_gyration()
+	
+	# get the ensemble-average end-to-end distance
+	mean_e2e = P.get_mean_end_to_end_distance()
+	
+	# get the full distribution of the radius of gyration
+	[bins, p_rg] = P.get_radius_of_gyration_distribution()
+	
+	# get the full distribution of the distances between residue 4 and 20
+	[bins, p_r] = P.get_interresidue_distance_distribution(4,20)
+
+#### Why?
+When studying disordered or unfolded polypeptides we often lack a relevant "reference" frame to calibrate our expectations or results. The AFRC provides a pre-parameterized model that recapitulates a polypeptide in a theta solvent. A theta solvent is a solvent where chain-chain and chain-solvent are equally attractive, canceling out excluded volume effects, giving rise to a chain with a polymer scaling exponent of 0.5. 
+
+#### How?
+Read the preprint! But the TL/DR is we performed numerical simulations to generate Flory Random Coil ensembles (see Mao et al 
+
+#### Who?
+The AFRC was developed by Garrett, Jhullian and Alex in the [Holehouse lab](https://www.holehouselab.com/). For any questions please contact Alex.
+
+
+## Implementation details
 This analytical solution is based on the rotational isomeric state approximation of Flory and Volkenstein and parameterized using numerical simulations of residue-specific Flory Random Coil. It provides an interface into sequence-specific polymeric properties (i.e. intra-molecular distances) expected for a given sequence and behaves like a polymer in a true theta solvent. In this way it provides a convenient reference state though which real simulations or experiments can be normalized against.
 
 ## Installation

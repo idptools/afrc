@@ -731,6 +731,138 @@ class AnalyticalFRC:
 
 
         
+    def get_pre_profile(self, label_position, tau_c=4, t_delay=12, R_2D=14, W_H=600000000, sample_size=10000):
+        """
+        Calculate the hypothetical paramagentic resonance enhance (PRE) profile 
+        expected if a spin label were placed at position label_postion. The 
+        only requried input is the label position, but additional experimental
+        parameters can be passed in as well. 
+
+        It's important to remember this method does not consider the explicit
+        position of a spin label linker, but does provide a reference model
+        as to the expected PRE profile if the chain behaved as an AFRC chain.
+        
+
+        Parameters
+        -----------------------
+        Label position : int
+            Position along the chain that is labelled
+
+        tau_c : float
+            tau_c is the effective correlation time, measured in nanoseconds, 
+            which is typically between 1 and 30. Default = 4
+
+        t_delay : float
+            Total duration of the INEPT delays from the PRE experiment, as 
+            measured in ms. This will depend on the pulse sequence used, 
+            but is typically around 1-30 ms for HSQC. Default = 12
+
+        R_2D : float
+            Is the transverse relaxation rate of the backbone amide protons in 
+            the diamagnetic form of the protein, measured in Herz (i.e. 'per 
+            second'). A value of around 10 might be expected. Default = 14
+
+        W_H : float
+            Is the proton Larmor frequency, which is typically the "MHz" value
+            associated with the magnet, given in Hz. For examle, a 600 MHz 
+            magnet would use the value 600000000. Note that the proton 
+            Larmor frequency at 1 Tesla = 267530000 per second per Tesla.
+            Default = 600000000
+
+        Returns
+        -----------------------
+        list
+            Returns a 3 place tuple.
+
+            [0] -  residue indices (starting at 0)
+            [1] -  PRE profile (a value between 0 and 1) 
+            [2] -  PRE H1 relaxatation profile (gamma)
+
+        References
+        -------------
+        [1] Meng, W., Lyle, N., Luan, B., Raleigh, D.P., and Pappu, R.V. 
+        (2013). Experiments and simulations show how long-range
+        contacts can form in expanded unfolded proteins with negligible 
+        secondary structure.
+        Proc. Natl. Acad. Sci. U. S. A. 110, 2123-2128.
+
+        [2] Das, R.K., Huang, Y., Phillips, A.H., Kriwacki, R.W., and Pappu, 
+        R.V. (2016). Cryptic sequence features within the disordered protein 
+        p27Kip1 regulate cell cycle signaling. Proc. Natl. Acad. Sci. U. S. A. 
+        113, 5616- 5621.
+        
+        [3] Peran, I., Holehouse, A. S., Carrico, I. S., Pappu, R. V., Bilsel, 
+        O., & Raleigh, D. P. (2019). Unfolded states under folding conditions 
+        accommodate sequence-specific conformational preferences with random 
+        coil-like dimensions. Proceedings of the National Academy of Sciences 
+        of the United States of America, 116(25), 12301–12310.
+
+        [4] Lalmansingh, J. M., Keeley, A. T., Ruff, K. M., Pappu, R. V., & 
+        Holehouse, A. S. (2023). SOURSOP: A Python package for the analysis 
+        of simulations of intrinsically disordered proteins. bioRxiv : The 
+        Preprint Server for Biology. https://doi.org/10.1101/2023.02.16.528879
+
+
+        """
+
+        if label_position < 0 or label_position > len(self.seq):
+            raise AFRCException(f'Passed invalid label position - must be between 0 and {len(self.seq)}')
+        
+        # local constants (show in a couple of units for clarity...)
+        original_K = 1.2300e-32       # K constant in cm6*s-2
+        K_IN_NM6   = original_K*1e42  # K constant in nm6 s-2
+
+        # # convert tau_c to seconds and calculate tau_c squared
+        tau_c = float(tau_c)/1000000000     # tau c in seconds
+        tau_c_squared = tau_c * tau_c       #
+
+        t_delay_in_seconds = t_delay/1000
+
+        # compute the prefactor term which will be used when computing the PRE dependent 
+        # relaxation profiles
+        W_H_SQUARED = W_H*W_H
+        PREFACTOR = (3 * tau_c)/(1 + W_H_SQUARED * tau_c_squared)
+        PREFACTOR = (4*tau_c + PREFACTOR)
+        PREFACTOR = PREFACTOR * K_IN_NM6
+
+        gamma = []
+
+        # finally for each residue calculate the r^6 distances associated with each frame and for EACH FRAME calculate
+        # the PREFACTOR / r^6 value and then take the mean. THIS gives a different answer to if you take the mean distance
+        # and calculate the PREFACTOR/<R^6> value because there is a non-linear mapping between relaxation and distance so
+        # it's important the former method is used (i.e. only average at the end). This calculates the gamma coefficient for
+        # each residue, which measures relaxation
+        for idx in range(0, len(self.seq)):
+            
+
+            distances_nm = 0.1*self.sample_inter_residue_distance_distribution(label_position, idx, n=sample_size)
+            distances_nm_r6 = np.power(distances_nm, 6)
+
+            # old method - average here
+            #gamma.append(np.mean(PREFACTOR/distances_nm_r6))
+
+            # new method - take the full distribution of corrected values
+            gamma.append(PREFACTOR/distances_nm_r6)
+
+        profile = []
+        for g in gamma:
+
+            # old method
+            #profile.append((R_2D * np.exp(-g*t_delay_in_seconds)) / (R_2D + g))
+
+            # new method
+            profile.append(np.mean((R_2D * np.exp(-g*t_delay_in_seconds)) / (R_2D + g)))
+
+        indices = np.arange(0,len(self.seq))
+        return [indices, profile, gamma]
+            
+
+
+        
+
+            
+            
+            
 
 
 

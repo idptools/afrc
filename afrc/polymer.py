@@ -317,4 +317,3 @@ class PolymerObject:
         re_v =  np.sqrt((self.RMS_Re*self.RMS_Re)/(self.nres-1))
         return re_v
 
-        
