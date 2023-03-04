@@ -102,7 +102,8 @@ class WormLikeChain:
 
         """
 
-        self.__compute_end_to_end_distribution()
+        if self.__p_of_Re_R is False:
+            self.__compute_end_to_end_distribution()
 
         return (self.__p_of_Re_R, self.__p_of_Re_P)
 
@@ -119,7 +120,7 @@ class WormLikeChain:
         Returns
         -------
         float
-           Value equal to the mean radius of gyration.
+           Value equal to the mean end-to-end distance
 
         """
         [a,b] = self.get_end_to_end_distribution()
@@ -139,7 +140,7 @@ class WormLikeChain:
         Returns
         -------
         float
-           Value equal to the mean radius of gyration.
+           Value equal to the root-mean-squared end-to-end distance
 
         """
 
