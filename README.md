@@ -41,13 +41,16 @@ The AFRC was developed by Garrett, Jhullian and Alex in the [Holehouse lab](http
 
 
 ## Implementation details
-This analytical solution is based on the rotational isomeric state approximation of Flory and Volkenstein and parameterized using numerical simulations of residue-specific Flory Random Coil. It provides an interface into sequence-specific polymeric properties (i.e. intra-molecular distances) expected for a given sequence and behaves like a polymer in a true theta solvent. In this way it provides a convenient reference state though which real simulations or experiments can be normalized against.
+This analytical solution is based on the rotational isomeric state approximation of Flory and Volkenstein and parameterized using numerical simulations of residue-specific Flory Random Coil. It provides an interface into sequence-specific polymeric properties (i.e. intra-molecular distances) expected for a given sequence and behaves like a polymer in a true theta solvent. In this way it provides a convenient reference state through which real simulations or experiments can be normalized against.
 
 ## Installation
 To install `afrc`:
 
 	pip install afrc 
 
+
+## Google colab notebook
+[Click here to use AFRC (and other polymer models) via the Google colab notebook](https://colab.research.google.com/drive/1WHw8ous7IgcKd2LKYuJLeBTlkdEYoRAk?usp=sharing)
 
 ## Quickstart
 There is a single user-facing object that is built from the `afrc` package which is the AnalyticalFRC object. This object gives access to a bunch of additional object functions. As an example
