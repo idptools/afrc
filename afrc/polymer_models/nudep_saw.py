@@ -212,6 +212,42 @@ class NuDepSAW:
         Ree = self.get_mean_end_to_end_distance(nu=nu, prefactor=prefactor)
 
         return np.sqrt(Ree**2*(top/bottom))
+
+    # .....................................................................................
+    #
+    def sample_end_to_end_distribution(self, n=1000, nu=0.5, prefactor=5.5):
+        """
+        Subsamples from the end-to-end distance distribution to generate an uncorrelated 
+        'trajectory' of points. Useful for creating a sized-match sample to compare with 
+        simulation data.
+
+        Parameters
+        ----------
+        n : int
+           Number of random values to sample (default = 1000)
+
+        nu : float
+            Flory scaling exponent. Should fall between 0.33 and 0.6
+
+        prefactor : float
+            Prefactor is a number that tunes the SAW dimensions. Default is 5.5 A.
+
+        
+        Returns
+        -------
+        np.ndarray
+           Returns an n-length array with n independent values (floats)
+
+        """
+
+        # note this model does not memoize necause nu and prefactor can change
+        # so we don't 
+        self.__compute_end_to_end_distribution(nu=nu, prefactor=prefactor)
+
+                
+        return choice(self.__p_of_Re_R, n, p=self.__p_of_Re_P)
+
+
     
 
     # .....................................................................................
@@ -278,7 +314,6 @@ class NuDepSAW:
 
         # first term in EQ 9b as written by Soranno 2020)
         T1 = (A1*4*np.pi)/Ree
-
 
         # for each possible value of 'r'
         for i in range(0,len(p_dist)):
