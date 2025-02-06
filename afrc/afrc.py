@@ -205,7 +205,7 @@ class AnalyticalFRC:
 
     # .....................................................................................
     #
-    def get_distance_map(self, calculation_mode='scaling law'):
+    def get_distance_map(self, calculation_mode='scaling law', symmetric_map=False):
         """
         Returns the complete inter-residue distance map, an [n x n] upper-right triangle
         matrix that can be used as a reference set for constructing scaling maps.
@@ -222,7 +222,11 @@ class AnalyticalFRC:
             'scaling law'  - means the derived scaling relationships are used to calculate the 
                              average distance
 
-            If one of these is not provided then 
+            If one of these is not provided then  an AFRCException is raised.
+
+        symmetric_map : bool (default = False)
+            If True, a full [n x n] matrix is returned, if False only the upper right triangle
+            is returned.
 
         Returns
         -------
@@ -246,6 +250,8 @@ class AnalyticalFRC:
         for i in range(0,len(self.seq)):
             for j in range(i,len(self.seq)):
                 dm[i,j] = self.matrix[i][j].get_mean_end_to_end_distance(calculation_mode)
+                if symmetric_map:
+                    dm[j,i] = dm[i,j]
 
         return dm
 
@@ -695,39 +701,71 @@ class AnalyticalFRC:
 
         """
 
+        if R1 == R2:
+            return 1.0
         
         # get the distribution of inter-residue distances 
         interres_dist = self.get_interresidue_distance_distribution(R1, R2)
-
-        if R1 == R2:
-            return 1.0
 
         # build a list where of truth values where each element is true or false (true if val < thresh)
         t = interres_dist[0] < threshold
     
         # find largest index from the truth vals
-        all_vals = [i for i, x in enumerate(t) if x]
-
-        if len(all_vals) == 0:
+        if not np.any(t):  # Fast exit if no values meet threshold
             return 0.0
-
-        idx_max = max(all_vals)
+        
+        idx_max = np.where(t)[0][-1]  # Last index where condition is True
     
         # get xvals and y vals that we want to integrate over - i.e. we assume we're going to calculate
         # the finite integral from 0 -> idx_max, so this is basically defining the region of a curve
         # we're going to integrate over
-        xval = interres_dist[0][:idx_max]
-        yval = interres_dist[1][:idx_max]
+        xval = interres_dist[0][:idx_max + 1]
+        yval = interres_dist[1][:idx_max + 1]
     
         # dx which is prefactor for normalization
         dx = xval[1]-xval[0]
     
-        # integrate and normalize by dx so sums to 1 if thresh --> infinity
-        # note - modern scipy calls this function 'simpson' but for backwards 
-        # compactibility we'll go with simps here..
-        area_under_curve = integrate.simps(yval, xval)/dx
-
+        area_under_curve = np.trapz(yval, dx=dx)/dx
+            
         return area_under_curve
+        
+    # .....................................................................................
+    #
+    def get_contact_map(self, threshold, symmetric_map=False):
+        """
+        Function that returns a contact map for the protein, where the contact map is a 
+        square matrix where each element is the contact fraction between two residues. 
+
+        Parameters
+        -------------
+        threshold : float
+            A distance threshold in angstroms - can be a float or an int.
+
+        symmetric_map : bool (default = False)
+            If True, a full [n x n] matrix is returned, if False only the upper right triangle
+            is returned.
+
+        Returns
+        ----------
+        np.ndarray
+            Returns a square matrix where each element is the contact fraction between 
+            two residues. 
+
+        """
+
+        # initialize the contact map
+        contact_map = np.zeros((len(self.seq),len(self.seq)))
+
+        # for each pair of residues calculate the contact fraction
+        for i in range(0,len(self.seq)):
+            for j in range(i,len(self.seq)):
+                contact_map[i,j] = self.get_contact_fraction(i, j, threshold)
+                if symmetric_map:
+                    contact_map[j,i] = contact_map[i,j]
+
+        return contact_map
+        
+        
 
 
         
