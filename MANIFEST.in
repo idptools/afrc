@@ -1,0 +1,9 @@
+include LICENSE
+include MANIFEST.in
+
+# in THEORY this means everything under 
+# the `afrc/` directory is included
+graft afrc
+
+# avoids tmp files being packaged
+global-exclude *.py[cod] __pycache__ *.so

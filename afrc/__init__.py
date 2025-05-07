@@ -10,11 +10,12 @@ For any questions please contact Alex.
 """
 
 # Add imports here
-from .afrc import *
+from afrc.afrc import *
+import os
 
-# Handle versioneer
-from ._version import get_versions
-versions = get_versions()
-__version__ = versions['version']
-__git_revision__ = versions['full-revisionid']
-del get_versions, versions
+# Generate _version.py if missing and in the Read the Docs environment
+if os.getenv("READTHEDOCS") == "True" and not os.path.isfile('../goose/_version.py'):   
+    import versioningit            
+    __version__ = versioningit.get_version('../')
+else:
+    from ._version import __version__
