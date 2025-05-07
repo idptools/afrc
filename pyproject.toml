@@ -1,7 +1,7 @@
 [build-system]
 
 # delete cython/numpy if not needed
-requires = ["setuptools>=61,<69", "versioningit~=2.0"]
+requires = ["setuptools>=61", "versioningit~=2.0"]
 build-backend = "setuptools.build_meta"
 
 
