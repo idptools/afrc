@@ -14,13 +14,13 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../.'))
+sys.path.insert(0, os.path.abspath('..'))
 
 
 # -- Project information -----------------------------------------------------
 
 project = 'AFRC'
-copyright = ("2019 - 2023, Holehouse Lab")
+copyright = ("2019 - 2025, Holehouse Lab")
 author = 'Alex Holehouse'
 
 # The short X.Y version
