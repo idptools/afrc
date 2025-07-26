@@ -77,6 +77,9 @@ If you find a bug or have any feature requests, please submit [an issue here on 
 ## License
 The afrc package is distributed by the [Holehouse Lab](https://www.holehouselab.com/) under the GNU LESSER GENERAL PUBLIC LICENSE.
 
+## Changelog
+* **0.3.7** (May 2025): Moved to `pyproject.toml` and `versioningit` for build and versioning to enable compatiblity with later Python versions.
+
 ## References
 Flory, P. J. (1969). Statistical Mechanics of Chain Molecules. Oxford University Press.
 
