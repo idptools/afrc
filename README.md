@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="afrc_logo.png" width="420" alt="AFRC logo"/>
+  <img src="https://raw.githubusercontent.com/idptools/afrc/main/afrc_logo.png" width="420" alt="AFRC logo"/>
 </p>
 
 <h1 align="center">afrc</h1>
@@ -97,7 +97,7 @@ The full mathematical formalism, parameters, and usage examples for each model a
 Full documentation &mdash; including a theory section (formalism, parameters, references) and an
 application section (usage examples and code reference) for every model &mdash; is hosted at
 [afrc.readthedocs.io](https://afrc.readthedocs.io/). Worked, plotted examples for each model are
-in the [`demo/`](demo/) directory.
+in the [`demo/`](https://github.com/idptools/afrc/tree/main/demo) directory.
 
 ## Citation
 
