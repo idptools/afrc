@@ -335,11 +335,10 @@ class AnalyticalFRC:
     # .....................................................................................
     #
     def get_end_to_end_distribution(self):
-        """
-        Defines the end-to-end distance (Re) distribution using the standard end-to-end model (as in [Rubinstein2003]_).
-
-        :math:`P(r)=4\\pi r^2 \\Biggl( \\frac {3} {2 \\pi \\langle r^2 \\rangle} \\Biggr)^2 e^{\\frac{3r^2}{2\\langle r^2 \\rangle}}`
-
+        r"""
+        Defines the end-to-end distance (Re) distribution using the standard end-to-end model (as in [Rubinstein2003]_). 
+        
+        :math:`P(r) = 4\pi r^2 \left( \frac{3}{2\pi \langle r^2 \rangle} \right)^{3/2} e^{-\frac{3 r^2}{2 \langle r^2 \rangle}}`
 
         Returns
         -------
