@@ -8,7 +8,9 @@ from .polymer import PolymerObject
 from .config import P_OF_R_RESOLUTION, AA_list
 from .iofunctions import validate_keyword
 from .polymer_models import wlc
-from scipy import integrate
+
+# np.trapz was renamed to np.trapezoid in NumPy 2.0; fall back for older NumPy
+_trapezoid = getattr(np, "trapezoid", getattr(np, "trapz", None))
 
 
 class AFRCException(Exception):
@@ -25,20 +27,20 @@ class AnalyticalFRC:
     package provides. All functionality is associated with function called 
     from this object, and the object itself is instantiated with a single    
     amino acid string. For all intents and purposes, one can think of as 
-    an *AnalyticalFRC* object as holding one protein sequence and providing 
+    an *AnalyticalFRC* object as holding one protein sequence and providing
     an interface to ask specific types of polymer questions.
-    
+
     .. code-block:: python
 
           from afrc import AnalyticalFRC
           MyProtein = AnalyticalFRC('KFGGPRDQGSRHDSEQDNSDNNTIFVQGLG')
-    
+
     Note
     ----
-    Distributions and parameters are only calculate as requested, such that 
-    initializing an Analytical FRC  object is a cheap operation. However, 
-    operations relating to intramolecular distances (``get_distance_map()``,     
-    ``get_internal_scaling()`` etc. are more computationally expensive.
+    Distributions and parameters are only calculated as requested, such that
+    initializing an AnalyticalFRC object is a cheap operation. However,
+    operations relating to intramolecular distances (``get_distance_map()``,
+    ``get_internal_scaling()`` etc.) are more computationally expensive.
 
 
         
@@ -70,7 +72,7 @@ class AnalyticalFRC:
 
         try:
             seq = seq.upper()
-        except AttributeError as e:
+        except AttributeError:
             raise AFRCException('Input must be a string of amino acids')
             
         # check a valid string was passed and assign to object variable 
@@ -87,7 +89,7 @@ class AnalyticalFRC:
         self.full_seq_PO = PolymerObject(seq, self.p_of_r_resolution)
         self.matrix=False
 
-        # finally define publically faicing access to other polymer models 
+        # finally define publicly facing access to other polymer models
         self.other_models = {}
 
         # finally we define other polymer models which are attached as their own
@@ -147,7 +149,7 @@ class AnalyticalFRC:
                 self.matrix.append(row)
 
             ## the second set of for-loops defines the inter-residue
-            ## distance for each unique pari of residues
+            ## distance for each unique pair of residues
             for i in range(0, len(self.seq)):
                 for j in range(i, len(self.seq)):
                     subseq = self.seq[i:j]                
@@ -245,7 +247,7 @@ class AnalyticalFRC:
         # initialize the distance-distance matrix
         dm = np.zeros((len(self.seq),len(self.seq)))
         
-        # for each inter-residue dustance (not only upper right
+        # for each inter-residue distance (only the upper-right
         # triangle is computed)
         for i in range(0,len(self.seq)):
             for j in range(i,len(self.seq)):
@@ -276,8 +278,8 @@ class AnalyticalFRC:
         np.ndarray
            An [2 x n] matrix (where n = length of the amino acid sequence). The first column
            is the set of | i-j | distances, and the second defines the average inter-residue 
-           distances between every pair of residues that are | i-j | residues apart in sequnce 
-           space.                
+           distances between every pair of residues that are | i-j | residues apart in sequence
+           space.
         
         """
 
@@ -332,18 +334,18 @@ class AnalyticalFRC:
 
     # .....................................................................................
     #
-    def get_end_to_end_distribution(self, model='afrc'):        
+    def get_end_to_end_distribution(self):
         """
-        Defines the end-to-end distance (Re) distribution using the standard end-to-end model (as in [Rubinstein2003]_). 
-        
-        :math:`P(r)=4\pi r^2 \Biggl( \\frac {3} {2 \pi \\langle r^2 \\rangle} \Biggr)^2 e^{\\frac{3r^2}{2\\langle r^2 \\rangle}}`
+        Defines the end-to-end distance (Re) distribution using the standard end-to-end model (as in [Rubinstein2003]_).
+
+        :math:`P(r)=4\\pi r^2 \\Biggl( \\frac {3} {2 \\pi \\langle r^2 \\rangle} \\Biggr)^2 e^{\\frac{3r^2}{2\\langle r^2 \\rangle}}`
 
 
         Returns
         -------
 
         tuple of arrays
-           A 2-pair tuple of numpy arrays where the first is the distance (in Angstroms) and 
+           A 2-pair tuple of numpy arrays where the first is the distance (in Angstroms) and
            the second array is the probability of that distance.
 
         """
@@ -356,19 +358,15 @@ class AnalyticalFRC:
     #        
     def get_mean_radius_of_gyration(self, calculation_mode='distribution'):
         """
-        Returns the mean radius of gyration (:math:`R_g`) as calculated from the 
-        :math:`R_g` distribution.
+        Returns the mean radius of gyration (:math:`R_g`).
 
-        Paramaters
-        ...........---
-
-
-        calculation_mode : str 
-             calculation_mode defines the mode in which the average is calculated, and can be 
-             set to either 'scaling law' (default) or 'distribution'. If 'distribution' is used
+        Parameters
+        ----------
+        calculation_mode : str
+             calculation_mode defines the mode in which the average is calculated, and can be
+             set to either 'distribution' (default) or 'scaling law'. If 'distribution' is used
              then the complete Rg distribution is used to calculate the expected value. If the
-             'scaling law' is used then the standard Rg = R0 * N^{0.5} is used. 
-       
+             'scaling law' is used then the standard Rg = R0 * N^{0.5} is used.
 
         Returns
         -------
@@ -428,7 +426,7 @@ class AnalyticalFRC:
         Returns
         -------
         float
-           Value equal to the average end-to-end distance (as defined by ``mode``).
+           Value equal to the average hydrodynamic radius (in Angstroms).
 
         References
         -------------
@@ -489,18 +487,17 @@ class AnalyticalFRC:
         Returns
         -------
 
-        np.ndarray 
-           Probability distribution returned as a 2D numpy array in which column one is 
-           the distances (in Angstroms) and colum two is the probablility.
-           
-        """                
+        tuple of np.ndarray
+           A 2-pair tuple ``(distances, probabilities)`` where the first array is the
+           distance (in Angstroms) and the second is the corresponding probability.
+
+        """
 
         R1 = self.__validate_residue_index(R1)
         R2 = self.__validate_residue_index(R2)
  
         if R1 == R2:
-            return np.array([[0],[1.0]])
-           
+            return (np.array([0.0]), np.array([1.0]))
 
         self.__build_matrix()
         return self.matrix[R1][R2].get_end_to_end_distribution()
@@ -524,19 +521,19 @@ class AnalyticalFRC:
            The second residue of the pair being investigated.
 
         calculation_mode : string (keyword)
-             calculation_mode defines the mode in which the average is calculated, and can be 
+             calculation_mode defines the mode in which the average is calculated, and can be
              set to either 'scaling law' (default) or 'distribution'. If 'distribution' is used
-             then the complete Rg distribution is used to calculate the expected value. If the
-             'scaling law' is used then the standard Rg = R0 * N^{0.5} is used.        
+             then the complete Re distribution is used to calculate the expected value. If the
+             'scaling law' is used then the standard Re = R0 * N^{0.5} is used.
 
 
         Returns
         -------
 
         float
-           Absolute mean distance (if mode='mean_distance') or root mean-squared 
-           
-           
+           The mean distance (in Angstroms) between residues R1 and R2.
+
+
         """
         calculation_mode = validate_keyword(['distribution','scaling law'], calculation_mode, 'calculation_mode')
 
@@ -641,15 +638,21 @@ class AnalyticalFRC:
     #
     def sample_inter_residue_distance_distribution(self, R1, R2, n=1000):
         """
-        Subsamples from the end-to-end distance distribution to generate an uncorrelated 
-        'trajectory' of points. Useful for creating a sized-match sample to compare with 
-        simulation data.
+        Subsamples from the inter-residue distance distribution (between residues
+        R1 and R2) to generate an uncorrelated 'trajectory' of points. Useful for
+        creating a sized-match sample to compare with simulation data.
 
         Parameters
         ----------
+        R1 : int
+           The first residue of the pair being investigated.
+
+        R2 : int
+           The second residue of the pair being investigated.
+
         n : int
            Number of random values to sample (default = 1000)
-        
+
         Returns
         -------
         np.ndarray
@@ -725,7 +728,7 @@ class AnalyticalFRC:
         # dx which is prefactor for normalization
         dx = xval[1]-xval[0]
     
-        area_under_curve = np.trapz(yval, dx=dx)/dx
+        area_under_curve = _trapezoid(yval, dx=dx)/dx
             
         return area_under_curve
         
@@ -771,10 +774,10 @@ class AnalyticalFRC:
         
     def get_pre_profile(self, label_position, tau_c=4, t_delay=12, R_2D=14, W_H=600000000, sample_size=10000):
         """
-        Calculate the hypothetical paramagentic resonance enhance (PRE) profile 
-        expected if a spin label were placed at position label_postion. The 
-        only requried input is the label position, but additional experimental
-        parameters can be passed in as well. 
+        Calculate the hypothetical paramagnetic relaxation enhancement (PRE) profile
+        expected if a spin label were placed at position label_position. The
+        only required input is the label position, but additional experimental
+        parameters can be passed in as well.
 
         It's important to remember this method does not consider the explicit
         position of a spin label linker, but does provide a reference model
@@ -810,11 +813,11 @@ class AnalyticalFRC:
         Returns
         -----------------------
         list
-            Returns a 3 place tuple.
+            Returns a 3-element list.
 
             [0] -  residue indices (starting at 0)
-            [1] -  PRE profile (a value between 0 and 1) 
-            [2] -  PRE H1 relaxatation profile (gamma)
+            [1] -  PRE profile (a value between 0 and 1)
+            [2] -  PRE H1 relaxation profile (gamma)
 
         References
         -------------
@@ -843,8 +846,8 @@ class AnalyticalFRC:
 
         """
 
-        if label_position < 0 or label_position > len(self.seq):
-            raise AFRCException(f'Passed invalid label position - must be between 0 and {len(self.seq)}')
+        if label_position < 0 or label_position >= len(self.seq):
+            raise AFRCException(f'Passed invalid label position - must be between 0 and {len(self.seq)-1}')
         
         # local constants (show in a couple of units for clarity...)
         original_K = 1.2300e-32       # K constant in cm6*s-2
@@ -871,7 +874,6 @@ class AnalyticalFRC:
         # it's important the former method is used (i.e. only average at the end). This calculates the gamma coefficient for
         # each residue, which measures relaxation
         for idx in range(0, len(self.seq)):
-            
 
             distances_nm = 0.1*self.sample_inter_residue_distance_distribution(label_position, idx, n=sample_size)
             distances_nm_r6 = np.power(distances_nm, 6)
@@ -879,8 +881,12 @@ class AnalyticalFRC:
             # old method - average here
             #gamma.append(np.mean(PREFACTOR/distances_nm_r6))
 
-            # new method - take the full distribution of corrected values
-            gamma.append(PREFACTOR/distances_nm_r6)
+            # new method - take the full distribution of corrected values. Note that
+            # for idx == label_position the distances are all zero (a residue with
+            # itself), giving an infinite relaxation rate; this is expected and the
+            # divide-by-zero is suppressed here.
+            with np.errstate(divide='ignore'):
+                gamma.append(PREFACTOR/distances_nm_r6)
 
         profile = []
         for g in gamma:

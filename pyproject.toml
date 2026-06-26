@@ -14,11 +14,34 @@ authors = [
     {name = "Alex Holehouse", email = "alex.holehouse@wustl.edu"}
 ]
 license = {text = "LGPLv3"}
-readme = "README.md"  
-requires-python = ">=3.7"
+readme = "README.md"
+requires-python = ">=3.10"
+keywords = [
+    "polymer physics",
+    "intrinsically disordered proteins",
+    "IDP",
+    "Flory random coil",
+    "unfolded proteins",
+    "radius of gyration",
+    "biophysics",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
+]
 
-# add in as needed	
-dependencies = [	  
+# add in as needed
+dependencies = [
     "numpy>=1.12.0",
     "scipy",
 ]
@@ -27,6 +50,13 @@ dependencies = [
 test = [
   "pytest>=6.1.2",
 ]
+
+[project.urls]
+Homepage = "https://github.com/idptools/afrc"
+Documentation = "https://afrc.readthedocs.io/"
+Repository = "https://github.com/idptools/afrc"
+"Bug Tracker" = "https://github.com/idptools/afrc/issues"
+"Google Colab" = "https://colab.research.google.com/drive/1WHw8ous7IgcKd2LKYuJLeBTlkdEYoRAk?usp=sharing"
 
 [tool.setuptools]
 zip-safe = false

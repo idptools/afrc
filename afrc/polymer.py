@@ -7,7 +7,7 @@ specific polymer of a fixed length.
 
 """
 import numpy as np
-from .config import AA_list, RIJ_RMS_R0, RIJ_R0, RG_X0, RG_R0, P_OF_R_RESOLUTION
+from .config import AA_list, RIJ_RMS_R0, RIJ_R0, RG_X0, P_OF_R_RESOLUTION
 from numpy.random import choice
 
 class PolymerObject:
@@ -89,10 +89,11 @@ class PolymerObject:
 
         Returns
         -------
-        2D Numpy array in which the first column is the distance (in angstroms) and the second
-        column is the probablity.
-        
-        
+        tuple of np.ndarray
+           A 2-pair tuple ``(distances, probabilities)`` where the first array is the
+           distance (in angstroms) and the second is the corresponding probability.
+
+
         """
 
         # if we have not yet done it, computed the end-to-end distance distribution
@@ -109,12 +110,13 @@ class PolymerObject:
         """
         Function that returns the radius of gyration distribution based on the analytical FRC
         model.
-       
+
 
         Returns
         -------
-        2D Numpy array in which the first column is the distance (in angstroms) and the second
-        column is the probablity.
+        tuple of np.ndarray
+           A 2-pair tuple ``(distances, probabilities)`` where the first array is the
+           distance (in angstroms) and the second is the corresponding probability.
 
         """
 
@@ -130,24 +132,26 @@ class PolymerObject:
     #        
     def get_mean_end_to_end_distance(self, calculation_mode='scaling law'):
         """
-        Function that returns the mean end-to-end distance using the analytical 
-        FRC mode. Average can be computed using either the scalin law derivation
-        or using the mean of the distribution.
+        Function that returns the mean end-to-end distance using the analytical
+        FRC model. The average can be computed using either the scaling law
+        derivation or using the mean of the distribution.
 
-        param
-        
-
-       
+        Parameters
+        ----------
+        calculation_mode : str
+            Either 'scaling law' (default) - which uses Re = R0 * N^{0.5} - or
+            'distribution', which integrates over the end-to-end distance
+            distribution.
 
         Returns
         -------
-        2D Numpy array in which the first column is the distance (in angstroms) and the second
-        column is the probablity.
+        float
+           The mean end-to-end distance (in angstroms).
 
 
         """
 
-        # if we're using the scaling law relationshup
+        # if we're using the scaling law relationship
         if calculation_mode == 'scaling law':
             return self.__R0 * np.power(self.nres,0.5)
 
@@ -163,10 +167,24 @@ class PolymerObject:
     #        
     def get_mean_radius_of_gyration(self, calculation_mode='scaling law'):
         """
+        Function that returns the mean radius of gyration using the analytical
+        FRC model.
+
+        Parameters
+        ----------
+        calculation_mode : str
+            Either 'scaling law' (default) - which returns Re/sqrt(6) using the
+            scaling-law mean end-to-end distance - or 'distribution', which
+            integrates over the radius of gyration distribution.
+
+        Returns
+        -------
+        float
+           The mean radius of gyration (in angstroms).
 
         """
 
-        # if we're using the scaling law relationshup
+        # if we're using the scaling law relationship
         if calculation_mode == 'scaling law':
             re = self.get_mean_end_to_end_distance('scaling law')
             return re/np.sqrt(6)
@@ -219,11 +237,10 @@ class PolymerObject:
         # remains sufficient
         p_dist = np.arange(0,3*(7*np.power(self.nres,0.5)), self.p_of_r_resolution)
 
-        # initialize an empty vector which will be populated with probability 
+        # initialize an empty vector which will be populated with probability
         # values
         p_val_raw = np.zeros(len(p_dist))
-        p_val_raw_alt = np.zeros(len(p_dist))
-        
+
         # compute the ensemble average square end-to-end distance. Note that
         # self.__R0_RMS * np.power(self.nres,0.5) gives SQRT(<Re^2>), so by squaring
         # this we get the correct parameter (i.e. mean-squared end-to-end distance)
@@ -239,16 +256,7 @@ class PolymerObject:
 
         _prreturn_vectorized = np.vectorize(_prreturn)
         p_val_raw = _prreturn_vectorized(p_dist)
-        
-        # leave for now - old way - works but is a bit slower...
-        """
-        for i in xrange(0,len(p_dist)):
-            #p_val[i] = 4*np.pi*np.power(p_dist[i],2)*np.power((3/(2*np.pi*mean_squared_re)),3.0/2)*np.exp(-(3*p_dist[i]*p_dist[i])/(2*mean_squared))
-                p_val_raw_alt[i] = four_pi*A*np.power(p_dist[i],2)*np.exp(-(3*p_dist[i]*p_dist[i])/(2*self.mean_squared_re))
-                if p_val_raw_alt[i] != p_val_raw[i]:
-                    raise AFRCException('Diff in distributions -bug')
-        """
-                
+
         self.__p_of_Re_P = p_val_raw/np.sum(p_val_raw)
         self.__p_of_Re_R = p_dist
         
@@ -266,8 +274,8 @@ class PolymerObject:
         """
 
         # note 0.5 reflects the scaling exponent, 3 is the dimensionality
-        alpha = 1/((0.5*3 - 1));
-        delta = 1/(1-0.5);
+        alpha = 1/((0.5*3 - 1))
+        delta = 1/(1-0.5)
         
         # setup r values and the empty np vector we're gonna populate    
         # p_val_rg_r = np.arange(0,self.nres, self.p_of_r_resolution) old way...
@@ -284,26 +292,11 @@ class PolymerObject:
             
         r_mod_vector = p_val_rg_r * self.__X0
         _prreturn_vectorized = np.vectorize(_prreturn)
-        
+
+        # the with clause means we don't complain on div-by-zero when r_mod is
+        # zero (i.e. at zero distance)
         with np.errstate(divide='ignore'):
-            p_val_raw_alt = _prreturn_vectorized(r_mod_vector)
-            p_val_raw = p_val_raw_alt
-
-        """
-        # this with clause means we don't complain on div by zero when r_mod gets set to zero (i.e. at zero distance)
-        with np.errstate(divide='ignore'):
-
-
-            for i in xrange(0,len(p_val_rg_r)):
-
-                r_mod = p_val_rg_r[i] * self.__X0 # this is where sequence specificty is applied
-                f = np.exp(   -   np.power(N_nu/r_mod, alpha*3) - np.power((r_mod / N_nu),delta))
-
-                p_val_raw[i] = np.power(self.nres, -0.5*3)*f*(r_mod/N_nu)                                
-                #if p_val_raw[i] != p_val_raw_alt[i]:
-                #    raise Exception('PROBLEMS')
-        """
-
+            p_val_raw = _prreturn_vectorized(r_mod_vector)
 
         self.__p_of_Rg_R = p_val_rg_r
         self.__p_of_Rg_P = p_val_raw/sum(p_val_raw)
@@ -312,8 +305,19 @@ class PolymerObject:
 
     def compute_apparent_rms_bond_length(self):
         """
+        Computes the apparent root-mean-square bond length implied by the
+        root-mean-square end-to-end distance of this polymer.
+
+        For an ideal chain the mean-squared end-to-end distance is related to
+        the apparent bond length :math:`b` by :math:`\\langle R_e^2 \\rangle = (N-1) b^2`,
+        so this function returns :math:`b = \\sqrt{\\langle R_e^2 \\rangle / (N-1)}`.
+
+        Returns
+        -------
+        float
+           The apparent root-mean-square bond length (in Angstroms).
 
         """
-        re_v =  np.sqrt((self.RMS_Re*self.RMS_Re)/(self.nres-1))
+        re_v = np.sqrt((self.RMS_Re_scaling * self.RMS_Re_scaling) / (self.nres - 1))
         return re_v
 

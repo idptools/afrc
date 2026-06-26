@@ -1,8 +1,7 @@
 import numpy as np
 from afrc.config import P_OF_R_RESOLUTION
-from numpy.random import choice
 
-class WLCException:
+class WLCException(Exception):
     pass
 
 class WormLikeChain:
@@ -173,7 +172,7 @@ class WormLikeChain:
 
         # define a function that depends on 'r'
         def zeta(r):
-            return (1 - ((5*Lp/4*Lc) - 
+            return (1 - ((5*Lp/(4*Lc)) -
                          ((2*np.power(r,2))/(np.power(Lc,2))) +
                          ((33*np.power(r,4))/(80*Lp*np.power(Lc,3))) +
                          ((79*np.power(Lp,2))/(160*np.power(Lc,2))) +
@@ -189,8 +188,13 @@ class WormLikeChain:
 
             # compute P(r) at (r) based on the equations 5a/b in Zhou et al 2004
             p_val_raw[i] = prefactor_A*np.power(r,2)*np.exp(-3.0*(np.power(r,2))/(4*Lp*Lc))*zeta(r)
-            
-            
+
+
+        # the Zhou series expansion (zeta) is only valid for r up to the contour
+        # length and can produce spurious negative values in the far tail; clamp
+        # these to zero so the result is a valid probability distribution
+        p_val_raw[p_val_raw < 0] = 0.0
+
         # finally normalize so sums to 1.0 and assign to the object
         self.__p_of_Re_P = p_val_raw/np.sum(p_val_raw)
         self.__p_of_Re_R = p_dist

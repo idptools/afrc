@@ -46,7 +46,7 @@ RIJ_R0 = {'A': 6.0381,
           'Y': 5.8266}
 
 
-## Note small edits to G and P from homopolymer based on a greater range of callibration curves 
+## Note small edits to G and P from homopolymer based on a greater range of calibration curves 
 ## original unfixed val
 ## small uniform increase of 0.0005 to correct small deviation at long chains identified
 RG_X0 = { 'A': 0.5355,

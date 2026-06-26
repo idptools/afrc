@@ -1,6 +1,5 @@
 import numpy as np
 from afrc.config import P_OF_R_RESOLUTION
-from numpy.random import choice
 
 class WLC2Exception(Exception):
     pass
@@ -58,10 +57,10 @@ class WormLikeChain2:
         # also sanity check
 
         if self.lp <= 0:
-            raise WLCException('Error, lp cannot be less than or equal to 0')
+            raise WLC2Exception('Error, lp cannot be less than or equal to 0')
 
         if self.b <= 0:
-            raise WLCException('Error, aa_size cannot be less than or equal to 0')
+            raise WLC2Exception('Error, aa_size cannot be less than or equal to 0')
         
         Lc = self.b*self.nres
 
@@ -103,7 +102,7 @@ class WormLikeChain2:
 
         """
         Defines the end-to-end distribution based on the Worm-like chain (WLC) as defined by
-        O'Brient et al.
+        O'Brien et al.
 
         This is a composition independent model for which the end-to-end distance depends
         solely on the number of amino acids. It is included here as an additional reference 

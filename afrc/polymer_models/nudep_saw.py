@@ -3,7 +3,7 @@ from afrc.config import P_OF_R_RESOLUTION
 from numpy.random import choice
 from scipy.special import gamma as GAMMA_FUNCTION
 
-class NuDepSAWException:
+class NuDepSAWException(Exception):
     pass
 
 class NuDepSAW:
@@ -40,7 +40,7 @@ class NuDepSAW:
 
         """
 
-        # set gamma - orginally defined in
+        # set gamma - originally defined in
         # Le Guillou, J. C., & Zinn-Justin, J. (1977). Critical Exponents for the n-Vector
         # Model in Three Dimensions from Field Theory. Physical Review Letters, 39(2), 95–98.
         # for the case of n=0 (polymer), and raised in this context in the Soranno form
@@ -166,7 +166,7 @@ class NuDepSAW:
 
         """
 
-        # note this model does not memoize necause nu and prefactor can change
+        # note this model does not memoize because nu and prefactor can change
         # so we don't 
         self.__compute_end_to_end_distribution(nu=nu, prefactor=prefactor)
 
@@ -176,29 +176,81 @@ class NuDepSAW:
     #        
     def get_mean_end_to_end_distance(self, nu=0.5, prefactor=5.5):
         """
-        Returns the mean end-to-end distance (:math:`R_e`). As calculated from the SAW model as defined 
-        https://aip.scitation.org/doi/10.1063/1.3082151. 
-        
+        Returns the mean end-to-end distance (:math:`R_e`) for the nu-dependent
+        SAW model.
+
+        The mean is computed by integrating over the :math:`P(r)` vs. :math:`r`
+        distribution (i.e. :math:`\\sum r \\cdot P(r)`), consistent with the
+        convention used by the other models in this package.
+
+        Parameters
+        ----------
+        nu : float
+            Flory scaling exponent. Should fall between 0.33 and 0.6.
+
+        prefactor : float
+            Prefactor that tunes the SAW dimensions. Default is 5.5 A.
+
         Returns
         -------
         float
-           Value equal to the mean radius of gyration.
+           Value equal to the mean end-to-end distance.
 
         """
 
-        
-        [a,b] = self.get_end_to_end_distribution(nu=nu, prefactor=prefactor)
-        
-        return np.sqrt(np.sum(np.power(a,2)* b))
+        [a, b] = self.get_end_to_end_distribution(nu=nu, prefactor=prefactor)
 
+        return np.sum(a * b)
 
     # .....................................................................................
-    #        
+    #
+    def get_root_mean_squared_end_to_end_distance(self, nu=0.5, prefactor=5.5):
+        """
+        Returns the root-mean-square end-to-end distance
+        (:math:`\\sqrt{\\langle R_e^2 \\rangle}`) for the nu-dependent SAW model.
+
+        The value is computed by taking the square root after integrating over
+        :math:`P(r)` vs. :math:`r^2`.
+
+        Parameters
+        ----------
+        nu : float
+            Flory scaling exponent. Should fall between 0.33 and 0.6.
+
+        prefactor : float
+            Prefactor that tunes the SAW dimensions. Default is 5.5 A.
+
+        Returns
+        -------
+        float
+           Value equal to the root-mean-square end-to-end distance.
+
+        """
+
+        [a, b] = self.get_end_to_end_distribution(nu=nu, prefactor=prefactor)
+
+        return np.sqrt(np.sum(np.power(a, 2) * b))
+
+    # .....................................................................................
+    #
     def get_mean_radius_of_gyration(self, nu=0.5, prefactor=5.5):
         """
-        Returns the mean end-to-end distance (:math:`R_e`). As calculated from the SAW model as defined 
-        https://aip.scitation.org/doi/10.1063/1.3082151. 
-        
+        Returns the mean radius of gyration (:math:`R_g`) for the nu-dependent
+        SAW model.
+
+        :math:`R_g` is obtained from the mean-squared end-to-end distance via the
+        analytical ratio :math:`\\langle R_g^2 \\rangle / \\langle R_e^2 \\rangle`
+        expressed in terms of the gamma exponent and the scaling exponent
+        :math:`\\nu`.
+
+        Parameters
+        ----------
+        nu : float
+            Flory scaling exponent. Should fall between 0.33 and 0.6.
+
+        prefactor : float
+            Prefactor that tunes the SAW dimensions. Default is 5.5 A.
+
         Returns
         -------
         float
@@ -209,7 +261,9 @@ class NuDepSAW:
         top = self.gamma*(self.gamma + 1)
         bottom = 2*(self.gamma + 2*nu)*(self.gamma + 2*nu + 1)
 
-        Ree = self.get_mean_end_to_end_distance(nu=nu, prefactor=prefactor)
+        # the ratio above relates mean-squared radii, so we use the
+        # root-mean-square end-to-end distance (sqrt(<Re^2>)) here
+        Ree = self.get_root_mean_squared_end_to_end_distance(nu=nu, prefactor=prefactor)
 
         return np.sqrt(Ree**2*(top/bottom))
 
@@ -240,7 +294,7 @@ class NuDepSAW:
 
         """
 
-        # note this model does not memoize necause nu and prefactor can change
+        # note this model does not memoize because nu and prefactor can change
         # so we don't 
         self.__compute_end_to_end_distribution(nu=nu, prefactor=prefactor)
 

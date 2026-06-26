@@ -29,10 +29,11 @@ Finally, the afrc package also implements several additional polymer models, inc
    :maxdepth: 3
    :caption: Contents:
 
-   overview   
+   overview
    installation
-   quickstart   
-   modules/afrc
+   quickstart
+   polymer_models/index
+   polymer_models_application/index
    
 
 

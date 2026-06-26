@@ -41,14 +41,18 @@ def validate_keyword(viable_keywords, input_keyword, keyword_name):
 
     """
 
+    # imported here (rather than at module level) to avoid a circular import,
+    # as afrc.py imports this module at load time
+    from .afrc import AFRCException
+
     # build a custom error message
-    error_message = f"{keyword_name} must be set to one of {viable_keywords} (was set to {input_keyword})" 
+    error_message = f"{keyword_name} must be set to one of {viable_keywords} (was set to {input_keyword})"
 
     # first see if you can cast the keyword to lower (if this fails the input is probably not
     # even a string, but we use the same error message
     try:
         input_keyword = input_keyword.lower()
-    except:
+    except AttributeError:
         raise AFRCException(error_message)
 
     # next check if the input keyword was one of te allowed words, and, if not, we raise an exception

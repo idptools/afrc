@@ -1,8 +1,7 @@
 import numpy as np
 from afrc.config import P_OF_R_RESOLUTION
-from numpy.random import choice
 
-class SAWException:
+class SAWException(Exception):
     pass
 
 class SAW:
@@ -104,30 +103,74 @@ class SAW:
     #        
     def get_mean_end_to_end_distance(self, prefactor=5.5):
         """
-        Returns the mean end-to-end distance (:math:`R_e`). As calculated 
-        from the SAW model as defined 
-        https://aip.scitation.org/doi/10.1063/1.3082151. 
+        Returns the mean end-to-end distance (:math:`R_e`). As calculated
+        from the SAW model as defined
+        https://aip.scitation.org/doi/10.1063/1.3082151.
+
+        The mean is computed by integrating over the :math:`P(r)` vs. :math:`r`
+        distribution (i.e. :math:`\\sum r \\cdot P(r)`), consistent with the
+        convention used by the other models in this package.
 
         By default this uses a prefactor of 5.5 A (0.55 nanometers).
-        
+
+        Parameters
+        ----------
+        prefactor : float
+            Prefactor that tunes the SAW dimensions. Default is 5.5 A.
+
         Returns
         -------
         float
-           Value equal to the mean radius of gyration.
+           Value equal to the mean end-to-end distance.
 
         """
 
-        
-        [a,b] = self.get_end_to_end_distribution(prefactor)
-        
-        return np.sqrt(np.sum(np.power(a,2)* b))
+        [a, b] = self.get_end_to_end_distribution(prefactor)
+
+        return np.sum(a * b)
+
+    # .....................................................................................
+    #
+    def get_root_mean_squared_end_to_end_distance(self, prefactor=5.5):
+        """
+        Returns the root-mean-square end-to-end distance (:math:`\\sqrt{\\langle R_e^2 \\rangle}`)
+        as calculated from the SAW model.
+
+        The value is computed by taking the square root after integrating over
+        :math:`P(r)` vs. :math:`r^2`.
+
+        Parameters
+        ----------
+        prefactor : float
+            Prefactor that tunes the SAW dimensions. Default is 5.5 A.
+
+        Returns
+        -------
+        float
+           Value equal to the root-mean-square end-to-end distance.
+
+        """
+
+        [a, b] = self.get_end_to_end_distribution(prefactor)
+
+        return np.sqrt(np.sum(np.power(a, 2) * b))
 
     # .....................................................................................
     #        
     def get_mean_radius_of_gyration(self, prefactor=5.5):
         """
-        
-        
+        Returns the mean radius of gyration (:math:`R_g`) for the SAW model.
+
+        :math:`R_g` is obtained from the mean-squared end-to-end distance via the
+        analytical ratio :math:`\\langle R_g^2 \\rangle / \\langle R_e^2 \\rangle`
+        expressed in terms of the gamma exponent and the scaling exponent
+        :math:`\\nu` (see [1]).
+
+        Parameters
+        ----------
+        prefactor : float
+            Prefactor that tunes the SAW dimensions. Default is 5.5 A.
+
         Returns
         -------
         float
@@ -135,11 +178,13 @@ class SAW:
 
         """
         gamma = 1.1615
-        nu=0.589
+        nu = 0.589
         top = gamma*(gamma + 1)
         bottom = 2*(gamma + 2*nu)*(gamma + 2*nu + 1)
 
-        Ree = self.get_mean_end_to_end_distance(prefactor=prefactor)
+        # the ratio above relates mean-squared radii, so we use the
+        # root-mean-square end-to-end distance (sqrt(<Re^2>)) here
+        Ree = self.get_root_mean_squared_end_to_end_distance(prefactor=prefactor)
 
         return np.sqrt(Ree**2*(top/bottom))
 

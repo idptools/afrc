@@ -10,12 +10,12 @@ For any questions please contact Alex.
 """
 
 # Add imports here
-from afrc.afrc import *
+from afrc.afrc import *  # noqa: F401,F403
 import os
 
 # Generate _version.py if missing and in the Read the Docs environment
-if os.getenv("READTHEDOCS") == "True" and not os.path.isfile('../goose/_version.py'):   
-    import versioningit            
+if os.getenv("READTHEDOCS") == "True" and not os.path.isfile('../afrc/_version.py'):
+    import versioningit
     __version__ = versioningit.get_version('../')
 else:
-    from ._version import __version__
+    from ._version import __version__  # noqa: F401

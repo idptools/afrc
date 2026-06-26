@@ -17,20 +17,27 @@ As an example
    # create an AFRC object
    protein = AnalyticalFRC('MASNDYTQQATQSYGAYPTQPGQGYSQQSSQPYGQQSYSGYSQSTDTSGYGQSSYSSYGQSQNTGYGTQSTPQGYGSTGGYGSSQSSQSSYGQQSSYPGYGQQPAPSSTSGSYGSSSQSSSYGQPQSGSYSQQPSYGGQQQSYGQQQSYNPPQG')
 
-   # build the internal scaling profile 
+   # build the internal scaling profile
    internal_scaling = protein.get_internal_scaling()
 
-   # build the end-to-end distribution
-   end_to_end_distribution = protein.get_end_to_end_distribution()
+   # build the end-to-end distribution. The distribution functions return a
+   # 2-pair tuple (distances, probabilities), so they can be unpacked directly:
+   distances, probabilities = protein.get_end_to_end_distribution()
 
-   # build the rg distribution
-   rg_distribution = protein.get_radius_of_gyration_distribution()
+   # build the rg distribution (also returned as (distances, probabilities))
+   rg_distances, rg_probabilities = protein.get_radius_of_gyration_distribution()
 
    # compute the average rg
    mean_rg = protein.get_mean_radius_of_gyration()
 
    # compute the mean end-to-end distance (Re)
    mean_re = protein.get_mean_end_to_end_distance()
+
+   # compute the mean hydrodynamic radius (Rh)
+   mean_rh = protein.get_mean_hydrodynamic_radius()
+
+   # build a contact map using a 15 angstrom contact threshold
+   contact_map = protein.get_contact_map(15.0)
 
 
 
