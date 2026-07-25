@@ -98,10 +98,29 @@ def test_internal_scaling_exponent(protein):
     assert slope == pytest.approx(0.5, abs=0.01)
 
 
-def test_rg_equals_re_over_sqrt6_scaling_law(protein):
+def test_rg_scaling_law_and_distribution_agree(protein):
+    """The two ways of computing <Rg> should give effectively the same answer.
+
+    The 'scaling law' mode uses the calibrated Rg prefactor (RG_R0), which is
+    back-calculated from the same Lhuillier fits that generate the distribution, so
+    the two routes agree to well within a percent.
+    """
+    rg_law = protein.get_mean_radius_of_gyration('scaling law')
+    rg_dist = protein.get_mean_radius_of_gyration('distribution')
+    assert rg_law == pytest.approx(rg_dist, rel=0.01)
+
+
+def test_rg_is_close_to_re_over_sqrt6(protein):
+    """Rg should sit near - but not exactly at - the ideal-chain Re/sqrt(6) value.
+
+    Re/sqrt(6) is exact for *root-mean-square* radii; applied to the mean Re it
+    under-estimates <Rg> by around 5%, which is why the scaling-law mode uses the
+    calibrated prefactor instead.
+    """
     re = protein.get_mean_end_to_end_distance('scaling law')
     rg = protein.get_mean_radius_of_gyration('scaling law')
-    assert rg == pytest.approx(re / np.sqrt(6))
+    assert rg == pytest.approx(re / np.sqrt(6), rel=0.1)
+    assert rg > re / np.sqrt(6)
 
 
 def test_distance_distribution_and_scaling_law_agree(protein):
@@ -217,12 +236,28 @@ def test_sampling_sizes(protein):
     assert len(protein.sample_inter_residue_distance_distribution(5, 50, n=128)) == 128
 
 
+def test_inter_residue_sampling_is_order_independent(protein):
+    """Sampling (i, j) and (j, i) must draw from the same underlying distribution."""
+    forward = protein.sample_inter_residue_distance_distribution(5, 50, n=4096)
+    reverse = protein.sample_inter_residue_distance_distribution(50, 5, n=4096)
+    # same distribution, so the sample means should be close
+    assert np.mean(forward) == pytest.approx(np.mean(reverse), rel=0.05)
+
+
+def test_inter_residue_sampling_validates_indices(protein):
+    """Regression: negative indices previously wrapped round silently."""
+    with pytest.raises(AFRCException):
+        protein.sample_inter_residue_distance_distribution(-1, 5, n=10)
+    with pytest.raises(AFRCException):
+        protein.sample_inter_residue_distance_distribution(0, len(protein), n=10)
+
+
 # ---------------------------------------------------------------------------
 # golden-value regression snapshots
 # ---------------------------------------------------------------------------
 def test_golden_mean_values(protein):
     assert protein.get_mean_radius_of_gyration() == pytest.approx(30.788294820233368, abs=1e-6)
-    assert protein.get_mean_radius_of_gyration('scaling law') == pytest.approx(29.341888777603817, abs=1e-6)
+    assert protein.get_mean_radius_of_gyration('scaling law') == pytest.approx(30.80498415230296, abs=1e-6)
     assert protein.get_mean_end_to_end_distance() == pytest.approx(71.87265559462539, abs=1e-6)
     assert protein.get_mean_end_to_end_distance('distribution') == pytest.approx(71.73705605088517, abs=1e-4)
     assert protein.get_mean_hydrodynamic_radius('kirkwood-riseman') == pytest.approx(29.346190022800343, abs=1e-4)

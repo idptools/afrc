@@ -31,11 +31,21 @@ The :math:`\left(1 - (r/L_c)^2\right)` factors enforce finite extensibility
 
 .. math::
 
-   \langle R_g^2 \rangle = \frac{L_c}{6 C_2} + \frac{1}{4 C_2^2}
+   \langle R_g^2 \rangle = \frac{L_c}{6 C_2} - \frac{1}{4 C_2^2}
         + \frac{1}{4 C_2^3 L_c}
         - \frac{1 - e^{-L_c/L_p}}{8 C_2^4 L_c^2},
 
 and :meth:`get_mean_radius_of_gyration` returns :math:`\sqrt{\langle R_g^2 \rangle}`.
+This is the standard Benoit-Doty worm-like chain result
+
+.. math::
+
+   \langle R_g^2 \rangle = \frac{L_c L_p}{3} - L_p^2 + \frac{2 L_p^3}{L_c}
+        - \frac{2 L_p^4}{L_c^2}\left(1 - e^{-L_c/L_p}\right),
+
+rewritten in terms of :math:`C_2`; it reduces to the Gaussian-coil value
+:math:`L_c L_p/3` when :math:`L_c \gg L_p` and to the rigid-rod value
+:math:`L_c^2/12` when :math:`L_c \ll L_p`.
 
 Parameters
 ---------------------------------------------------------
@@ -56,8 +66,8 @@ Parameters
      - Segment length :math:`b` (Cα-Cα distance); sets the contour length
        :math:`L_c = N b`.
 
-The constructor additionally requires the sequence to be at least as long as the persistence
-length (:math:`N \ge L_p`); otherwise a ``WLC2Exception`` is raised.
+The constructor additionally requires the chain's *contour* length to be at least one
+persistence length (:math:`N b \ge L_p`); otherwise a ``WLC2Exception`` is raised.
 
 **What to expect for a protein.** Results closely track the Zhou model for typical
 disordered-protein parameters, with the practical advantages of numerical stability for long

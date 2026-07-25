@@ -44,9 +44,6 @@ class WormLikeChain2:
 
         """
 
-        if len(seq) < lp:
-            raise WLC2Exception('Passed sequence cannot be shorter than the persistence length')
-
         # set sequence info
         self.nres = len(seq)
 
@@ -61,8 +58,15 @@ class WormLikeChain2:
 
         if self.b <= 0:
             raise WLC2Exception('Error, aa_size cannot be less than or equal to 0')
-        
+
         Lc = self.b*self.nres
+
+        # the chain must be at least one persistence length long. Note this compares
+        # the CONTOUR length (N*aa_size, in Angstroms) with the persistence length -
+        # this check previously compared the number of residues against lp, which mixes
+        # a residue count with a length in Angstroms
+        if Lc < self.lp:
+            raise WLC2Exception('Passed sequence has a contour length (%.2f A) shorter than the persistence length (%.2f A)' % (Lc, self.lp))
 
         # next calculate params as defined by O'Brien et al
         
@@ -225,16 +229,28 @@ class WormLikeChain2:
     #        
     def get_mean_radius_of_gyration(self):
         """
-        Returns the mean radius of gyration (:math:`R_g`) as defined by 
-        O'Brien et al in [1]. NOTE it doesn't explicitly say it in the 
+        Returns the mean radius of gyration (:math:`R_g`) as defined by
+        O'Brien et al in [1]. NOTE it doesn't explicitly say it in the
         paper, but we're assuming this is actually Rg^{2} so this returns
         the square root of the Rg defined in table 1 (WLC row).
 
+        With :math:`C_2 = 1/(2L_p)` the expression used is
 
-        [1] O’Brien, E. P., Morrison, G., Brooks, B. R., & Thirumalai, D. (2009). 
-        How accurate are polymer models in the analysis of Forster resonance 
-        energy transfer experiments on proteins? The Journal of Chemical Physics, 
+            <Rg^2> = Lc/(6 C2) - 1/(4 C2^2) + 1/(4 C2^3 Lc)
+                     - (1 - exp(-Lc/Lp)) / (8 C2^4 Lc^2)
+
+        which is the standard Benoit-Doty worm-like chain result
+        :math:`\\langle R_g^2 \\rangle = L_c L_p/3 - L_p^2 + 2L_p^3/L_c - 2L_p^4/L_c^2 (1 - e^{-L_c/L_p})`
+        rewritten in terms of :math:`C_2`. In the rigid-rod limit
+        (:math:`L_c \\ll L_p`) it correctly reduces to :math:`L_c^2/12`.
+
+        [1] O’Brien, E. P., Morrison, G., Brooks, B. R., & Thirumalai, D. (2009).
+        How accurate are polymer models in the analysis of Forster resonance
+        energy transfer experiments on proteins? The Journal of Chemical Physics,
         130(12), 124903.
+
+        [2] Benoit, H., & Doty, P. (1953). Light scattering from non-Gaussian
+        chains. The Journal of Physical Chemistry, 57(9), 958-963.
 
         Returns
         -------
@@ -246,5 +262,10 @@ class WormLikeChain2:
         Lc = self.nres*self.b
         C2 = self.C2
         Lp = self.lp
-                                                                                        
-        return np.sqrt(Lc/(6*C2) + 1/(4*np.power(C2,2)) +  1/(Lc*4*np.power(C2, 3)) - (1 - np.exp(-Lc/Lp))/(8*np.power(C2, 4)*np.power(Lc, 2)))
+
+        # NOTE: the second term carries a MINUS sign (it is -Lp^2 in the
+        # Benoit-Doty form); it was previously written as +1/(4*C2^2), which
+        # over-estimated Rg (badly so for short chains, where it left a
+        # spurious constant 2*Lp^2 offset instead of the correct Lc^2/12
+        # rigid-rod limit)
+        return np.sqrt(Lc/(6*C2) - 1/(4*np.power(C2,2)) +  1/(Lc*4*np.power(C2, 3)) - (1 - np.exp(-Lc/Lp))/(8*np.power(C2, 4)*np.power(Lc, 2)))

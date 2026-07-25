@@ -16,13 +16,13 @@ The AFRC is parameterized against numerical simulations that recapitulate *bona 
 1. The ensemble-average end-to-end distance.
 2. The end-to-end distance distribution.
 3. The ensemble-average radius of gyration.
-4. The end-to-end distance distribution.
-5. The ensemble-average hydrodynamic radius
-6. All inter-residue average distances and distance distributions
-7. Inter-residue contact fractions
+4. The radius of gyration distribution.
+5. The ensemble-average hydrodynamic radius.
+6. All inter-residue average distances and distance distributions.
+7. Inter-residue contact fractions.
 
 
-Finally, the afrc package also implements several additional polymer models, including the Worm-like chain (WLC) model [Brien2009]_, the self-avoid walk (SAW) model [Brien2009]_, and a scaling-exponent SAW model (SAW-ν) [Zheng2018]_.
+Finally, the afrc package also implements several additional polymer models, including the worm-like chain (WLC) model [Zhou2004]_ [Brien2009]_, the self-avoiding walk (SAW) model [Brien2009]_, a scaling-exponent SAW model (SAW-ν) [Zheng2018]_, the freely jointed chain, and the freely rotating chain. Each shares a common interface with the AFRC, so the same sequence can be compared against several reference frames - see :doc:`polymer_models/index` for the formalism behind each and :doc:`polymer_models_application/index` for usage.
 
 
 .. toctree::

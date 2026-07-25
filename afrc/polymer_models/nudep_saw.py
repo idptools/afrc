@@ -8,9 +8,25 @@ class NuDepSAWException(Exception):
 
 class NuDepSAW:
     """
-    This class generates an object that returns polymer statistics consistent with a 
-    nu-dependent self-avoiding random walk (SAW). As developed by Zheng et al 2020
+    This class generates an object that returns polymer statistics consistent with a
+    nu-dependent self-avoiding random walk (SAW), as developed by Zheng et al. and
+    written in the form used here by Soranno.
 
+    This is the same universal scaling form used by the fixed-exponent
+    :class:`~afrc.polymer_models.saw.SAW` model, but with the Flory scaling exponent
+    (nu) left as a free parameter, so a single model spans the range from a collapsed
+    globule (nu ~ 1/3), through the ideal/theta chain (nu = 0.5), to a fully solvated
+    good-solvent coil (nu ~ 0.588).
+
+    This is a composition-independent model: the sequence is used only to set the number
+    of residues. It is included as an additional reference model.
+
+    [1] Zheng, W., Zerze, G. H., Borgia, A., Mittal, J., Schuler, B., & Best, R. B.
+    (2018). Inferring properties of disordered chains from FRET transfer efficiencies.
+    The Journal of Chemical Physics, 148(12), 123329.
+
+    [2] Soranno, A. (2020). Physical basis of the disorder-order transition. Archives of
+    Biochemistry and Biophysics, 685, 108305.
 
     """
 
@@ -78,12 +94,19 @@ class NuDepSAW:
         delta = 1/(1-nu)
         g = (gamma-1)/nu
 
+        A1 is the normalization constant that makes P(r) integrate to one, and is
+
+            A1 = (delta/4pi) * Gamma[(5+g)/delta]^((3+g)/2) / Gamma[(3+g)/delta]^((5+g)/2)
+
+        Note the gamma-function arguments are (5+g)/delta and (3+g)/delta, and the
+        (3+g)/2 and (5+g)/2 terms are EXPONENTS rather than multipliers.
+
         Parameters
         -------------
-        delta : float 
+        delta : float
             First parameters
 
-        g : float 
+        g : float
             second parameters
 
         Returns
@@ -94,16 +117,16 @@ class NuDepSAW:
 
         References
         -------------
-        Soranno, A. (2020). Physical basis of the disorder-order transition. Archives of 
+        Soranno, A. (2020). Physical basis of the disorder-order transition. Archives of
         Biochemistry and Biophysics, 685, 108305.
         """
 
         T1 = delta/(4*np.pi)
-        T2_top = GAMMA_FUNCTION(5+(g/delta))*((3+g)/2)
-        T2_bottom = GAMMA_FUNCTION(3+(g/delta))*((5+g)/2)
+        T2_top = np.power(GAMMA_FUNCTION((5+g)/delta), (3+g)/2)
+        T2_bottom = np.power(GAMMA_FUNCTION((3+g)/delta), (5+g)/2)
 
         return T1* (T2_top/T2_bottom)
-    
+
 
     # .....................................................................................
     #            
@@ -115,12 +138,19 @@ class NuDepSAW:
         delta = 1/(1-nu)
         g = (gamma-1)/nu
 
+        A2 sets the width of the distribution and is fixed by requiring that the
+        root-mean-square end-to-end distance of P(r) is exactly Ree, giving
+
+            A2 = ( Gamma[(5+g)/delta] / Gamma[(3+g)/delta] )^(delta/2)
+
+        As for A1, the gamma-function arguments are (5+g)/delta and (3+g)/delta.
+
         Parameters
         -------------
-        delta : float 
+        delta : float
             First parameters
 
-        g : float 
+        g : float
             second parameters
 
         Returns
@@ -130,29 +160,32 @@ class NuDepSAW:
 
         References
         -------------
-        Soranno, A. (2020). Physical basis of the disorder-order transition. Archives of 
+        Soranno, A. (2020). Physical basis of the disorder-order transition. Archives of
         Biochemistry and Biophysics, 685, 108305.
         """
 
-        top    = GAMMA_FUNCTION(5+(g/delta))
-        bottom = GAMMA_FUNCTION(3+(g/delta))
+        top    = GAMMA_FUNCTION((5+g)/delta)
+        bottom = GAMMA_FUNCTION((3+g)/delta)
 
-        return np.power(top/bottom, delta/2)    
-            
+        return np.power(top/bottom, delta/2)
+
+
     # .....................................................................................
     #        
     def get_end_to_end_distribution(self, nu=0.5, prefactor=5.5):
         """
-        Defines the end-to-end distribution based 
+        Defines the end-to-end distribution based on the nu-dependent SAW model.
 
         This is a composition independent model for which the end-to-end distance depends
-        solely on the number of amino acids. Both nu and the prefactor can be varied 
-        
+        solely on the number of amino acids. Both nu and the prefactor can be varied, and
+        together they set the root-mean-square end-to-end distance to
+        ``prefactor * N^nu``.
 
         Parameters
         ------------
         nu : float
-            Flory scaling exponent. Should fall between 0.33 and 0.6
+            Flory scaling exponent. Must lie strictly between 0 and 1; physically
+            meaningful values fall between 0.33 and 0.6.
 
         prefactor : float
             Prefactor is a number that tunes the SAW dimensions. Default is 5.5 A.
@@ -333,59 +366,54 @@ class NuDepSAW:
         [1] 
         
 
-        [2] Soranno, A. (2020). Physical basis of the disorder-order transition. 
+        [2] Soranno, A. (2020). Physical basis of the disorder-order transition.
         Archives of Biochemistry and Biophysics, 685, 108305.
 
-        
+
         """
-        
+
+        # nu must sit strictly between 0 and 1 - at nu = 1 delta blows up and at
+        # nu = 0 g blows up, so guard rather than emit a ZeroDivisionError
+        nu = float(nu)
+        if nu <= 0 or nu >= 1:
+            raise NuDepSAWException('Error, nu must be between 0 and 1 (physically meaningful values run from ~0.33 to ~0.6)')
+
+        # a zero-length chain has all its weight at r = 0
+        if self.zero_length:
+            self.__p_of_Re_R = np.array([0.0])
+            self.__p_of_Re_P = np.array([1.0])
+            return
+
         gamma = self.gamma
         g = (gamma -1)/nu
         delta = 1/(1-nu)
         A1 = self.__compute_A1(delta, g)
-        A2 = self.__compute_A2(delta, g)            
-    
-        # define the chainlength-dependent prefactor
-        ##
-        ## WARNING: For reasons I cannot explain, one needs to multiply the prefactor
-        ## by pi to get the distance units right. I suspect this reflects an error
-        ## somewhere, but multiplying by pi gives us quantitative agreement with both
-        ## SAW (when prefactors are the same and nu=0.598, within error of the approximations
-        ## made, AND with the AFRC when nu=0.5
-        ##
-        ## If anyone figures out where this mysterious pi factor has come from please let
-        ## me know!
-        ##
-        ## ~ash Jan 2023
-        Ree = prefactor*np.power(self.nres, nu)*np.pi
+        A2 = self.__compute_A2(delta, g)
 
-        # use same pdist as was used for the parent AFRC model - this is the set of (r) values
-        # on a P(r) vs. r plot
-        p_dist = np.arange(0,3*(7*np.power(self.nres,0.5)), self.p_of_r_resolution)
+        # define the chainlength-dependent prefactor. With A1/A2 computed correctly
+        # this is exactly the root-mean-square end-to-end distance of the resulting
+        # distribution (A2 is defined by that requirement), so no additional fudge
+        # factor is needed here
+        Ree = prefactor*np.power(self.nres, nu)
 
-        # initialize an empty array
-        p_val_raw = np.zeros(len(p_dist))
+        # r values on a P(r) vs. r plot. We use the same grid as the parent AFRC model,
+        # but ensure it always extends to at least 4*Ree - for long chains and/or large
+        # nu, Ree grows faster than the sqrt(N) AFRC grid, and truncating the grid below
+        # the tail of the distribution biases the mean and RMS values low
+        upper = max(3*(7*np.power(self.nres, 0.5)), 4*Ree)
+        p_dist = np.arange(0, upper, self.p_of_r_resolution)
 
         # first term in EQ 9b as written by Soranno 2020)
         T1 = (A1*4*np.pi)/Ree
 
-        # for each possible value of 'r'
-        for i in range(0,len(p_dist)):
+        # second term in EQ 9b (as written by Soranno 2020)
+        T2 = np.power(p_dist/Ree, 2+g)
 
-            r = p_dist[i]
+        # third term in EQ 9b (as written by Soranno 2020)
+        T3 = np.exp(-A2*np.power(p_dist/Ree, delta))
 
-            # second term in EQ 9b (as written by Soranno 2020)
-            T2 = np.power(r/Ree, 2+g)
-
-            # third term in EQ 9b (as written by Soranno 2020)
-            T3 = np.exp(-A2*np.power(r/Ree,delta))
-            
-            
-            p_val_raw[i] = T1*T2*T3
-
-            
-        p_val_length = len(p_val_raw)
+        p_val_raw = T1*T2*T3
 
         # finally normalize so sums to 1.0 and assign to the object
         self.__p_of_Re_P = p_val_raw/np.sum(p_val_raw)
-        self.__p_of_Re_R = p_dist[:p_val_length]
+        self.__p_of_Re_R = p_dist

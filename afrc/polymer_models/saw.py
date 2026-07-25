@@ -6,15 +6,23 @@ class SAWException(Exception):
 
 class SAW:
     """
-    This class generates an object that returns polymer statistics consistent with a 
-    self-avoiding random walk (SAW). This model was developed by Jhulian 'J' Alston,
-    and is based on the reference implementation by O'Brein et al [1]
+    This class generates an object that returns polymer statistics consistent with a
+    self-avoiding random walk (SAW). This model was developed by Jhullian 'J' Alston,
+    and is based on the reference implementation by O'Brien et al [1]
 
-    [1] O’Brien, E. P., Morrison, G., Brooks, B. R., & Thirumalai, D. (2009). 
-    How accurate are polymer models in the analysis of Forster resonance 
-    energy transfer experiments on proteins? The Journal of Chemical Physics, 
+    The chain is fixed at the good-solvent scaling exponent, held on the object as
+    ``self.nu = 0.598``. That single value sets both the chain-length dependence of the
+    end-to-end distance (:math:`R_{ee} = \\texttt{prefactor}\\,N^{\\nu}`) and the universal
+    :math:`R_g/R_e` ratio, so the two are guaranteed to describe the same chain. To vary
+    the exponent, use :class:`~afrc.polymer_models.nudep_saw.NuDepSAW` instead.
+
+    [1] O’Brien, E. P., Morrison, G., Brooks, B. R., & Thirumalai, D. (2009).
+    How accurate are polymer models in the analysis of Forster resonance
+    energy transfer experiments on proteins? The Journal of Chemical Physics,
     130(12), 124903.
 
+    [2] Le Guillou, J. C., & Zinn-Justin, J. (1977). Critical Exponents for the n-Vector
+    Model in Three Dimensions from Field Theory. Physical Review Letters, 39(2), 95-98.
 
     """
 
@@ -40,12 +48,23 @@ class SAW:
 
         """
 
-        # constants derived by 
+        # normalization constants for the des Cloizeaux scaling form, as tabulated by
+        # O'Brien et al. These are a matched set: they are exactly the values required
+        # to normalize P(r) and to set its root-mean-square to Ree given theta = 0.3
+        # and delta = 2.5, so they should only ever be changed together.
         self.a = 3.67853
         self.b = 1.23152
 
         self.theta = 0.3
         self.delta = 2.5
+
+        # the Flory scaling exponent and the (Le Guillou / Zinn-Justin) gamma exponent
+        # for a self-avoiding walk. nu is used BOTH to set the chain-length dependence of
+        # Ree (see __compute_end_to_end_distribution) and in the universal Rg/Re ratio
+        # (see get_mean_radius_of_gyration) - it is held here as a single value so that
+        # the two cannot drift apart
+        self.nu = 0.598
+        self.gamma = 1.1615
 
         # set sequence info
         self.nres = len(seq)
@@ -162,9 +181,17 @@ class SAW:
         Returns the mean radius of gyration (:math:`R_g`) for the SAW model.
 
         :math:`R_g` is obtained from the mean-squared end-to-end distance via the
-        analytical ratio :math:`\\langle R_g^2 \\rangle / \\langle R_e^2 \\rangle`
+        analytical ratio
+
+        .. math::
+
+           \\frac{\\langle R_g^2 \\rangle}{\\langle R_e^2 \\rangle} =
+              \\frac{\\gamma(\\gamma + 1)}{2(\\gamma + 2\\nu)(\\gamma + 2\\nu + 1)}
+
         expressed in terms of the gamma exponent and the scaling exponent
-        :math:`\\nu` (see [1]).
+        :math:`\\nu` (see [1]). Both are taken from the object's ``gamma`` and ``nu``
+        attributes, so the exponent used here is by construction the same one that sets
+        the chain-length dependence of :math:`R_{ee}`.
 
         Parameters
         ----------
@@ -177,8 +204,8 @@ class SAW:
            Value equal to the mean radius of gyration.
 
         """
-        gamma = 1.1615
-        nu = 0.589
+        gamma = self.gamma
+        nu = self.nu
         top = gamma*(gamma + 1)
         bottom = 2*(gamma + 2*nu)*(gamma + 2*nu + 1)
 
@@ -198,20 +225,26 @@ class SAW:
         https://aip.scitation.org/doi/10.1063/1.3082151
         . This is where we actually perform the polymer model calculation.
 
-        
+
         """
-    
+
+        # a zero-length chain has all its weight at r = 0
+        if self.zero_length:
+            self.__p_of_Re_R = np.array([0.0])
+            self.__p_of_Re_P = np.array([1.0])
+            return
+
         # define the chainlength-dependent prefactor
-        Ree = prefactor*np.power(self.nres, 0.598)
+        Ree = prefactor*np.power(self.nres, self.nu)
 
-        # use same pdist as was used for the parent AFRC model - this is the set of (r) values
-        # on a P(r) vs. r plot
-        p_dist = np.arange(0,3*(7*np.power(self.nres,0.5)), self.p_of_r_resolution)
+        # r values on a P(r) vs. r plot. We use the same grid as the parent AFRC model,
+        # but ensure it always extends to at least 4*Ree - because Ree scales as N^nu
+        # while the AFRC grid scales as N^0.5, for long chains the grid would otherwise
+        # cut into the tail of the distribution and bias the mean and RMS values low
+        upper = max(3*(7*np.power(self.nres, 0.5)), 4*Ree)
+        p_dist = np.arange(0, upper, self.p_of_r_resolution)
 
-        # initialize an empty array
-        p_val_raw = np.zeros(len(p_dist))
-        
-        # define SAW normalization factors as defined by 
+        # define SAW normalization factors as defined by
         # https://aip.scitation.org/doi/10.1063/1.3082151
         a = self.a
         b = self.b
@@ -219,21 +252,13 @@ class SAW:
         theta = self.theta
         delta = self.delta
 
-        # for each possible value of 'r'
-        for i in range(0,len(p_dist)):
+        # compute p(r) across the whole grid
+        P_r_one = a/Ree
+        P_r_two = np.power(p_dist/Ree, theta+2)
+        P_r_three = np.exp(-b*np.power(p_dist/Ree, delta))
 
-            r = p_dist[i] 
-            
-            #compute p(r)
-            P_r_one = a/Ree
-            P_r_two = np.power((r/Ree), theta+2)
-            P_r_three = np.exp(-b*(np.power((r/Ree), delta)))
-            
-            p_val_raw[i] = (P_r_one)*(P_r_two)*(P_r_three)
-            #print(p_val_raw)
-            
-        p_val_length = len(p_val_raw)
+        p_val_raw = P_r_one*P_r_two*P_r_three
 
         # finally normalize so sums to 1.0 and assign to the object
         self.__p_of_Re_P = p_val_raw/np.sum(p_val_raw)
-        self.__p_of_Re_R = p_dist[:p_val_length]
+        self.__p_of_Re_R = p_dist

@@ -31,8 +31,8 @@ Vary the persistence length:
 
 .. note::
 
-   ``WormLikeChain2`` requires the sequence to be at least as long as the persistence length,
-   otherwise a ``WLC2Exception`` is raised.
+   ``WormLikeChain2`` requires the chain's contour length (``len(seq) * aa_size``) to be at
+   least one persistence length, otherwise a ``WLC2Exception`` is raised.
 
 See also the ``demo/demo_WormLikeChain2.ipynb`` notebook for a worked, plotted example.
 

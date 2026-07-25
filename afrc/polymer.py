@@ -7,7 +7,8 @@ specific polymer of a fixed length.
 
 """
 import numpy as np
-from .config import AA_list, RIJ_RMS_R0, RIJ_R0, RG_X0, P_OF_R_RESOLUTION
+from .config import AA_list, RIJ_RMS_R0, RIJ_R0, RG_X0, RG_R0, P_OF_R_RESOLUTION
+from .exceptions import AFRCException
 from numpy.random import choice
 
 class PolymerObject:
@@ -53,6 +54,9 @@ class PolymerObject:
         # RG prefactor for Lhuillier equation 'X0'
         self.__X0 = 0
 
+        # RG prefactor for the Rg scaling law (<Rg> = RG_R0 * N^{0.5})
+        self.__RG_R0 = 0
+
         # if sequence is empty no need to compute anything, and set the
         # zero length flag to to true, and return (we're done!). This allows 
         # the code to natively deal with zero-length strings rather than throwing
@@ -65,12 +69,16 @@ class PolymerObject:
         # just calculating the compositionally-weighted average value for the R0_RMS, R0 and X0
         # prefactors. Recall that
         # 
-        #  Root mean squared Re = N*R0_RMS^{0.5}
-        #  <Re> = N*R0^{0.5}
-        #  <Rg> = N*X0^{0.5}
+        #  Root mean squared Re = R0_RMS*N^{0.5}
+        #  <Re> = R0*N^{0.5}
+        #  <Rg> = RG_R0*N^{0.5}
+        #
+        # (X0 is the prefactor that enters the Lhuillier P(Rg) expression rather than
+        # a scaling-law prefactor, see __compute_Rg_distribution)
         for AA in AA_list:
             self.__R0_RMS = self.__R0_RMS + (seq.count(AA)/float(self.nres))*RIJ_RMS_R0[AA]
             self.__R0 = self.__R0 + (seq.count(AA)/float(self.nres))*RIJ_R0[AA]
+            self.__RG_R0 = self.__RG_R0 + (seq.count(AA)/float(self.nres))*RG_R0[AA]
 
             # note - we apply a +0.005 offset to each RG_X0 value
             self.__X0 = self.__X0 + (seq.count(AA)/float(self.nres))*(RG_X0[AA]+0.005)
@@ -148,6 +156,10 @@ class PolymerObject:
         float
            The mean end-to-end distance (in angstroms).
 
+        Raises
+        ------
+        AFRCException
+           If an unrecognized calculation_mode is passed.
 
         """
 
@@ -159,6 +171,9 @@ class PolymerObject:
         elif calculation_mode == 'distribution':
             [a,b] = self.get_end_to_end_distribution()
             return np.sum(a*b)
+
+        else:
+            raise AFRCException(f"calculation_mode must be set to one of ['distribution', 'scaling law'] (was set to {calculation_mode})")
 
 
 
@@ -173,8 +188,8 @@ class PolymerObject:
         Parameters
         ----------
         calculation_mode : str
-            Either 'scaling law' (default) - which returns Re/sqrt(6) using the
-            scaling-law mean end-to-end distance - or 'distribution', which
+            Either 'scaling law' (default) - which uses Rg = RG_R0 * N^{0.5}, where
+            RG_R0 is the composition-weighted Rg prefactor - or 'distribution', which
             integrates over the radius of gyration distribution.
 
         Returns
@@ -182,20 +197,29 @@ class PolymerObject:
         float
            The mean radius of gyration (in angstroms).
 
+        Raises
+        ------
+        AFRCException
+           If an unrecognized calculation_mode is passed.
+
         """
 
-        # if we're using the scaling law relationship
+        # if we're using the scaling law relationship. Note we use the calibrated Rg
+        # prefactor here rather than the ideal-chain relation Rg = <Re>/sqrt(6); the
+        # latter relates root-mean-square (not mean) radii and so under-estimates <Rg>
+        # by ~5%, which would leave the two calculation_modes disagreeing
         if calculation_mode == 'scaling law':
-            re = self.get_mean_end_to_end_distance('scaling law')
-            return re/np.sqrt(6)
-            
-            
+            return self.__RG_R0 * np.power(self.nres, 0.5)
+
         # if we're calculating the expected value from the distribution
         elif calculation_mode == 'distribution':
             (a,b) = self.get_radius_of_gyration_distribution()
             return np.sum(a*b)
 
-      
+        else:
+            raise AFRCException(f"calculation_mode must be set to one of ['distribution', 'scaling law'] (was set to {calculation_mode})")
+
+
 
     # .....................................................................................
     #        
@@ -231,6 +255,15 @@ class PolymerObject:
     ##########################################################################################
     ##
     def __compute_end_to_end_distribution(self):
+
+        # a zero-length chain has no extent, so all its weight sits at r = 0. Handling
+        # this here (rather than letting the arithmetic below divide by zero) is what
+        # lets zero-length PolymerObjects - which the [n x n] inter-residue matrix
+        # necessarily contains along its diagonal - behave sanely
+        if self.zero_length:
+            self.__p_of_Re_R = np.array([0.0])
+            self.__p_of_Re_P = np.array([1.0])
+            return
 
         # set distance range we're going to calculate P of R over = max is 3* peak - a somewhat
         # arbitrarily big, safe value. Note we employ a heuristic to ensure for short chains this
@@ -273,8 +306,15 @@ class PolymerObject:
 
         """
 
+        # as for the end-to-end distribution, a zero-length chain puts all its
+        # weight at zero
+        if self.zero_length:
+            self.__p_of_Rg_R = np.array([0.0])
+            self.__p_of_Rg_P = np.array([1.0])
+            return
+
         # note 0.5 reflects the scaling exponent, 3 is the dimensionality
-        alpha = 1/((0.5*3 - 1))
+        alpha = 1/(0.5*3 - 1)
         delta = 1/(1-0.5)
         
         # setup r values and the empty np vector we're gonna populate    
@@ -317,7 +357,20 @@ class PolymerObject:
         float
            The apparent root-mean-square bond length (in Angstroms).
 
+        Raises
+        ------
+        AFRCException
+           If the polymer has fewer than two residues, in which case there are no
+           bonds and an apparent bond length is undefined.
+
         """
+
+        # with fewer than two residues there are zero bonds, so (N-1) is zero or
+        # negative and the expression below is undefined - fail loudly rather than
+        # returning an inf/nan
+        if self.nres < 2:
+            raise AFRCException('Cannot compute an apparent bond length for a polymer with fewer than two residues')
+
         re_v = np.sqrt((self.RMS_Re_scaling * self.RMS_Re_scaling) / (self.nres - 1))
         return re_v
 

@@ -6,21 +6,18 @@ An analytical version of the Flory Random Coil (FRC) for polypeptides, implement
 import numpy as np
 from .polymer import PolymerObject
 from .config import P_OF_R_RESOLUTION, AA_list
+from .exceptions import AFRCException
 from .iofunctions import validate_keyword
 from .polymer_models import wlc
 
 # np.trapz was renamed to np.trapezoid in NumPy 2.0; fall back for older NumPy
 _trapezoid = getattr(np, "trapezoid", getattr(np, "trapz", None))
 
+# AFRCException is defined in exceptions.py but re-exported here so that the
+# long-standing `from afrc.afrc import AFRCException` import path keeps working
+__all__ = ['AFRCException', 'AnalyticalFRC']
 
-class AFRCException(Exception):
-    """
-    Exception class specific for the Analytical FRC
 
-    """
-    pass
-
-            
 class AnalyticalFRC:
     """
     The AnalyticalFRC object is the main user-facing object that the AFRC 
@@ -89,13 +86,10 @@ class AnalyticalFRC:
         self.full_seq_PO = PolymerObject(seq, self.p_of_r_resolution)
         self.matrix=False
 
-        # finally define publicly facing access to other polymer models
-        self.other_models = {}
-
         # finally we define other polymer models which are attached as their own
         # class objects
         self.worm_like_chain = wlc.WormLikeChain(seq, self.p_of_r_resolution)
-        
+
 
 
 
@@ -190,9 +184,12 @@ class AnalyticalFRC:
 
         """
 
+        # note we catch TypeError as well as ValueError here - int('abc') raises the
+        # former but int(None) raises the latter, and both should surface as an
+        # AFRCException
         try:
             R = int(R)
-        except ValueError:
+        except (TypeError, ValueError):
             raise AFRCException('Could not convert residue [%s] to an integer' %(R))
 
         if R < 0:
@@ -269,9 +266,15 @@ class AnalyticalFRC:
         Distances are in angstroms and are measured from the residue center of mass.
 
         A linear log-log fit of this data gives a gradient of 0.5 (:math:`\\nu^{app} = 0.5`).
-        
+
         Parameters
         ----------
+        calculation_mode : string (keyword)
+            calculation_mode defines the mode in which each inter-residue average is
+            calculated, and can be set to either 'scaling law' (default) or
+            'distribution'. If 'distribution' is used then the complete Re distribution
+            is used to calculate the expected value. If the 'scaling law' is used then
+            the standard Re = R0 * N^{0.5} is used.
 
         Returns
         -------
@@ -365,7 +368,9 @@ class AnalyticalFRC:
              calculation_mode defines the mode in which the average is calculated, and can be
              set to either 'distribution' (default) or 'scaling law'. If 'distribution' is used
              then the complete Rg distribution is used to calculate the expected value. If the
-             'scaling law' is used then the standard Rg = R0 * N^{0.5} is used.
+             'scaling law' is used then the standard Rg = RG_R0 * N^{0.5} is used, where RG_R0
+             is the composition-weighted radius of gyration prefactor. The two modes agree to
+             well within a percent.
 
         Returns
         -------
@@ -560,11 +565,17 @@ class AnalyticalFRC:
         Parameters
         ----------
 
+        R1 : int
+           The first residue of the pair being investigated.
+
+        R2 : int
+           The second residue of the pair being investigated.
+
         calculation_mode : string (keyword)
-             calculation_mode defines the mode in which the average is calculated, and can be 
+             calculation_mode defines the mode in which the average is calculated, and can be
              set to either 'scaling law' (default) or 'distribution'. If 'distribution' is used
              then the complete Rg distribution is used to calculate the expected value. If the
-             'scaling law' is used then the standard Rg = R0 * N^{0.5} is used.        
+             'scaling law' is used then the standard Rg = RG_R0 * N^{0.5} is used.
 
 
         Returns
@@ -657,20 +668,23 @@ class AnalyticalFRC:
         np.ndarray
            Returns an n-length array with n independent values (floats)
 
+        Raises
+        ------
+        AFRCException
+           If either residue index is invalid.
+
         """
-        
+
+        # validate the indices before they are used - without this a negative index
+        # silently wraps round and samples the wrong pair of residues, and an
+        # out-of-range index raises a bare IndexError
+        R1 = self.__validate_residue_index(R1)
+        R2 = self.__validate_residue_index(R2)
+
         # construct the internal matrix of polymers
         self.__build_matrix()
 
-        # make sure R1 is the bigger of the 2 
-        if R1 > R2:
-            pass
-        else:
-            tmp = R1
-            R1 = R2
-            R2 = tmp
-
-        return self.matrix[R2][R1].sample_end_to_end_distribution(dist_size=n)
+        return self.matrix[R1][R2].sample_end_to_end_distribution(dist_size=n)
 
 
     # .....................................................................................
@@ -785,8 +799,9 @@ class AnalyticalFRC:
 
         Parameters
         -----------------------
-        Label position : int
-            Position along the chain that is labelled
+        label_position : int
+            Position along the chain that is labelled. Must be between 0 and the
+            length of the sequence minus one.
 
         tau_c : float
             tau_c is the effective correlation time, measured in nanoseconds, 
@@ -809,6 +824,11 @@ class AnalyticalFRC:
             Larmor frequency at 1 Tesla = 267530000 per second per Tesla.
             Default = 600000000
 
+        sample_size : int
+            Number of conformations drawn from each inter-residue distance
+            distribution when computing the relaxation rates. Larger values give a
+            smoother profile at the cost of more compute. Default = 10000
+
         Returns
         -----------------------
         list
@@ -816,7 +836,12 @@ class AnalyticalFRC:
 
             [0] -  residue indices (starting at 0)
             [1] -  PRE profile (a value between 0 and 1)
-            [2] -  PRE H1 relaxation profile (gamma)
+            [2] -  PRE H1 relaxation profile (gamma), one array of per-conformation relaxation rates per residue
+
+        Raises
+        -----------------------
+        AFRCException
+            If label_position is not a valid residue index.
 
         References
         -------------

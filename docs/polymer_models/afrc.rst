@@ -83,8 +83,19 @@ form of Lhuillier (1988):
 with :math:`\rho = X_0\, R_g`, dimensionality :math:`d = 3`, :math:`\nu = 1/2`,
 :math:`\alpha = 1/(\nu d - 1) = 2`, and :math:`\delta = 1/(1-\nu) = 2`. The
 composition-weighted prefactor :math:`X_0` again comes from the calibrated per-residue table.
-The mean radius of gyration can be taken either as the expectation of this distribution or
-from the ideal-chain relation :math:`R_g = \langle R_e \rangle / \sqrt{6}`.
+
+The mean radius of gyration can be taken either as the expectation of this distribution
+(``calculation_mode='distribution'``) or from the scaling law
+:math:`\langle R_g \rangle = R_0^{g}\, N^{1/2}` (``calculation_mode='scaling law'``), where
+:math:`R_0^{g}` is a second composition-weighted prefactor back-calculated from the same
+Lhuillier fits. The two routes agree to well within a percent.
+
+.. note::
+
+   The scaling law deliberately does *not* use the ideal-chain relation
+   :math:`R_g = \langle R_e \rangle/\sqrt{6}`. That relation holds between
+   *root-mean-square* radii; applied to the mean end-to-end distance it under-estimates
+   :math:`\langle R_g \rangle` by around 5%.
 
 **Hydrodynamic radius.** :math:`R_h` is available either from the Kirkwood-Riseman relation
 applied to the full inter-residue distance map, or from the empirical :math:`R_g \to R_h`
@@ -97,7 +108,9 @@ Behaviour and relationship to other models
 ---------------------------------------------------------
 
 By construction the AFRC behaves like a :doc:`nu-dependent SAW <nu_dependent_saw>` evaluated
-at :math:`\nu = 0.5`; the two distributions sit essentially on top of one another. Relative to
+at :math:`\nu = 0.5`: match that model's ``prefactor`` to the AFRC's composition-weighted
+:math:`R_0^{\mathrm{rms}}` and the two distributions sit essentially on top of one
+another. Relative to
 the other reference models in this package, the AFRC is *slightly more expanded* than the
 :doc:`worm-like chain <worm_like_chain_zhou>` (at a persistence length of 3 Å) and
 *substantially more compact* than the good-solvent :doc:`self-avoiding walk
@@ -137,8 +150,9 @@ is composition and length. There is consequently nothing to tune.
        Does not change the model, only its discretisation.
 
 **What to expect for a protein.** The apparent scaling exponent is :math:`\nu^{app} = 0.5`
-by construction. With :math:`R_0 \approx 6` Å, a disordered region of :math:`N` residues has
-:math:`R_e \approx 6\sqrt{N}` Å and :math:`R_g \approx R_e/\sqrt{6} \approx 2.5\sqrt{N}` Å.
+by construction. With :math:`R_0 \approx 6` Å and :math:`R_0^{g} \approx 2.5` Å, a disordered
+region of :math:`N` residues has :math:`R_e \approx 6\sqrt{N}` Å and
+:math:`R_g \approx 2.5\sqrt{N}` Å.
 Real intrinsically disordered regions *scatter around* these values: in the original study the
 ratio of simulated/measured to AFRC dimensions ranged from roughly 0.7 (more compact) to 1.4
 (more expanded), so the AFRC is best read as a theta-point touchstone rather than a strict

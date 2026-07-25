@@ -9,9 +9,11 @@ For any questions please contact Alex.
 
 """
 
+from .exceptions import AFRCException
+
 
 # .....................................................................................
-#        
+#
 def validate_keyword(viable_keywords, input_keyword, keyword_name):
     """
     General function that protects against poorly defined user input. This ensures
@@ -40,10 +42,6 @@ def validate_keyword(viable_keywords, input_keyword, keyword_name):
         exception.
 
     """
-
-    # imported here (rather than at module level) to avoid a circular import,
-    # as afrc.py imports this module at load time
-    from .afrc import AFRCException
 
     # build a custom error message
     error_message = f"{keyword_name} must be set to one of {viable_keywords} (was set to {input_keyword})"

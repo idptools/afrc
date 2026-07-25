@@ -156,6 +156,13 @@ class WormLikeChain:
 
         """
 
+        # a zero-length chain has zero contour length (which would divide by zero
+        # below), so put all its weight at r = 0
+        if self.zero_length:
+            self.__p_of_Re_R = np.array([0.0])
+            self.__p_of_Re_P = np.array([1.0])
+            return
+
         # define persistence length and contour length
         Lp = self.lp
         Lc = self.nres*self.b
