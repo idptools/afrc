@@ -3,7 +3,7 @@ iofunctions.py
 
 A collection of utilities for working with input/output data in the afrc module.
 
-Copyright Alex Holehouse 2018-2022 (holehouselab.com).
+Copyright Alex Holehouse 2018-2026 (holehouselab.com).
 
 For any questions please contact Alex.
 
@@ -20,26 +20,26 @@ def validate_keyword(viable_keywords, input_keyword, keyword_name):
     that input keywords are case insensitive (which in general we want).
 
     Parameters
-    ..........
-    
-    input_keyword : str
-         This defines the input value provided by the user. All keywords are 
-         lowercase so this function also automatically casts the keyword to 
-         lowercase to ensure keywords are actually case insensitive.
-        
+    ----------
     viable_keywords : list
-         viable_options is a list of strings which are the complete set of 
-         options that will be considered good. This is provided by the code 
+         viable_keywords is a list of strings which are the complete set of
+         options that will be considered good. This is provided by the code
          (i.e. is hard-coded in for a given function).
 
+    input_keyword : str
+         This defines the input value provided by the user. All keywords are
+         lowercase so this function also automatically casts the keyword to
+         lowercase to ensure keywords are actually case insensitive.
+
     keyword_name : string
-         This is the name of the keyword being defined, and again is 
+         This is the name of the keyword being defined, and again is
          hard-coded by the function.
 
     Returns
-    ........
-        Returns the lower-case cast keyword if valid, else raises an 
-        exception.
+    -------
+    str
+        Returns the lower-case cast keyword if valid, else raises an
+        AFRCException.
 
     """
 
@@ -53,7 +53,7 @@ def validate_keyword(viable_keywords, input_keyword, keyword_name):
     except AttributeError:
         raise AFRCException(error_message)
 
-    # next check if the input keyword was one of te allowed words, and, if not, we raise an exception
+    # next check if the input keyword was one of the allowed words, and, if not, we raise an exception
     if input_keyword not in viable_keywords:
         raise AFRCException(error_message)
 

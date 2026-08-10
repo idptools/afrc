@@ -305,7 +305,7 @@ class NuDepSAW:
     def sample_end_to_end_distribution(self, n=1000, nu=0.5, prefactor=5.5):
         """
         Subsamples from the end-to-end distance distribution to generate an uncorrelated 
-        'trajectory' of points. Useful for creating a sized-match sample to compare with 
+        'trajectory' of points. Useful for creating a size-matched sample to compare with
         simulation data.
 
         Parameters

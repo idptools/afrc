@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information -----------------------------------------------------
 
 project = 'AFRC'
-copyright = ("2019 - 2025, Holehouse Lab")
+copyright = ("2019 - 2026, Holehouse Lab")
 author = 'Alex Holehouse'
 
 # The short X.Y version
@@ -153,7 +153,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
     (master_doc, 'afrc', 'AFRC Documentation',
-     author, 'afrc', 'An analytical version of the Flory Random Coil for polypeptides, implemented using the rotational isomeric state approximation of Flory and Volkenstein and parameterized on the excluded volumed dihedral backbone maps',
+     author, 'afrc', 'An analytical version of the Flory Random Coil for polypeptides, implemented using the rotational isomeric state approximation of Flory and Volkenstein and parameterized on the excluded volume dihedral backbone maps',
      'Miscellaneous'),
 ]
 

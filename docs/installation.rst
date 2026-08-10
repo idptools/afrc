@@ -11,7 +11,7 @@ afrc is distributed via the Python packaging index (PyPI). As such, the current 
    
 Installation from GitHub
 ----------------------------
-To install the lates development version from GitHub run::
+To install the latest development version from GitHub run::
 
 	pip install git+ssh://git@github.com/idptools/afrc.git
    

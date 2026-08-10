@@ -1,6 +1,6 @@
 """
 afrc.py
-An analytical version of the Flory Random Coil (FRC) for polypeptides, implemented using the rotational isomeric state approximation of Flory and Volkenstein and parameterized on the excluded volumed dihedral backbone maps.
+An analytical version of the Flory Random Coil (FRC) for polypeptides, implemented using the rotational isomeric state approximation of Flory and Volkenstein and parameterized on the excluded volume dihedral backbone maps.
 
 """
 import numpy as np
@@ -389,8 +389,7 @@ class AnalyticalFRC:
     #        
     def get_mean_end_to_end_distance(self, calculation_mode='scaling law'):
         """
-        Returns the mean end-to-end distance (:math:`R_e`). This value can be the absolute
-        mean end-to-end distance or the root-mean-sequence end-to-end distance.
+        Returns the mean end-to-end distance (:math:`R_e`).
 
         Parameters
         ----------
@@ -405,7 +404,7 @@ class AnalyticalFRC:
         Returns
         -------
         float
-           Value equal to the average end-to-end distance (as defined by ``mode``).
+           Value equal to the average end-to-end distance (as defined by ``calculation_mode``).
 
         """
 
@@ -417,7 +416,7 @@ class AnalyticalFRC:
     #        
     def get_mean_hydrodynamic_radius(self, calculation_mode='kirkwood-riseman'):
         """
-        Returns the average hydrodynamic radius, calculated either useing the Kirkwood-Riseman
+        Returns the average hydrodynamic radius, calculated either using the Kirkwood-Riseman
         equation or using the empirical Rg-to-Rh conversion scheme developed by Nygaard et al.
 
         Parameters
@@ -601,8 +600,8 @@ class AnalyticalFRC:
     #
     def sample_radius_of_gyration_distribution(self,n=1000):
         """
-        Subsamples from the :math:`R_g` distirbution to generate an uncorrelated 'trajectory' 
-        of points. Useful for creating a sized-match sample to compare with simulation
+        Subsamples from the :math:`R_g` distribution to generate an uncorrelated 'trajectory'
+        of points. Useful for creating a size-matched sample to compare with simulation
         data.
 
         Parameters
@@ -626,7 +625,7 @@ class AnalyticalFRC:
     def sample_end_to_end_distribution(self,n=1000):
         """
         Subsamples from the end-to-end distance distribution to generate an uncorrelated 
-        'trajectory' of points. Useful for creating a sized-match sample to compare with 
+        'trajectory' of points. Useful for creating a size-matched sample to compare with
         simulation data.
 
         Parameters
@@ -650,7 +649,7 @@ class AnalyticalFRC:
         """
         Subsamples from the inter-residue distance distribution (between residues
         R1 and R2) to generate an uncorrelated 'trajectory' of points. Useful for
-        creating a sized-match sample to compare with simulation data.
+        creating a size-matched sample to compare with simulation data.
 
         Parameters
         ----------
@@ -692,7 +691,7 @@ class AnalyticalFRC:
     def get_contact_fraction(self, R1, R2, threshold):
         """
         Function that - given two residues (R1, and R2) and a distance threshold in Angstroms (threshold)
-        returns the faction of the time the center-of-mass distance between R1 and R2 is < threshold.
+        returns the fraction of the time the center-of-mass distance between R1 and R2 is < threshold.
 
         Practically, if we set threshold = 5, this gives you the expected contact fraction for two residues,
         which is a useful normalization factor.
@@ -712,7 +711,7 @@ class AnalyticalFRC:
         ----------
         float
             Returns a single value between 0 and 1 that reports on the fraction
-            of the time residues R1 and R2 are close than $threshold angstroms
+            of the time residues R1 and R2 are closer than ``threshold`` angstroms
             apart.
 
         """
@@ -819,7 +818,7 @@ class AnalyticalFRC:
 
         W_H : float
             Is the proton Larmor frequency, which is typically the "MHz" value
-            associated with the magnet, given in Hz. For examle, a 600 MHz 
+            associated with the magnet, given in Hz. For example, a 600 MHz
             magnet would use the value 600000000. Note that the proton 
             Larmor frequency at 1 Tesla = 267530000 per second per Tesla.
             Default = 600000000

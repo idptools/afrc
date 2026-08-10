@@ -7,7 +7,7 @@ afrc – the Analytical Flory Random Coil
 =========================================================
 afrc is a Python-based package for computing polymeric properties for unfolded polypeptides using an analytical implementation of the so-called Flory Random Coil (the AFRC). 
 
-Briefly, the AFRC is a pre-parameterized polymer model that recapitulates the dimensions of a polypeptide in a theta solvent. Technically speaking, this means both the second and third virial coefficients are set to zero, such that the AFRC enjoys fractal scaling with a true scaling exponent of 0.5 and no finite-size effects. This makes it well-suited as a reference mode for developing intuition, providing a comparison against experimental data, or offering normalization factors for simulations or experiments alike.
+Briefly, the AFRC is a pre-parameterized polymer model that recapitulates the dimensions of a polypeptide in a theta solvent. Technically speaking, this means both the second and third virial coefficients are set to zero, such that the AFRC enjoys fractal scaling with a true scaling exponent of 0.5 and no finite-size effects. This makes it well-suited as a reference model for developing intuition, providing a comparison against experimental data, or offering normalization factors for simulations or experiments alike.
 
 We developed the AFRC as a convenient tool for contextualizing simulations and experiments of disordered proteins. The AFRC is *not* a predictor of the dimensions of intrinsically disordered proteins or protein regions, but it does offer a 'null model' for how one might expect an IDR of a given sequence to behave if chain-chain and chain-solvent interactions were perfectly counterbalanced. 
 
