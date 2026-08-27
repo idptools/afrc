@@ -339,10 +339,51 @@ class PolymerObject:
             p_val_raw = _prreturn_vectorized(r_mod_vector)
 
         self.__p_of_Rg_R = p_val_rg_r
-        self.__p_of_Rg_P = p_val_raw/sum(p_val_raw)
+        self.__p_of_Rg_P = p_val_raw/np.sum(p_val_raw)
 
 
 
+    # .....................................................................................
+    #
+    def get_mean_inverse_end_to_end_distance(self):
+        """
+        Returns the mean *inverse* end-to-end distance, :math:`\\langle 1/R_e \\rangle`,
+        for this polymer.
+
+        For the Gaussian end-to-end distribution used by the AFRC this has the
+        closed form
+
+        .. math::
+
+           \\langle 1/R_e \\rangle = \\sqrt{\\frac{6}{\\pi \\langle R_e^2 \\rangle}}
+
+        which follows directly from integrating :math:`P(r)/r`. Note that this is
+        *not* the same as :math:`1/\\langle R_e \\rangle` - for a Gaussian chain the two
+        differ by a factor of exactly :math:`4/\\pi`. The mean inverse distance is the
+        quantity that enters the Kirkwood-Riseman expression for the hydrodynamic
+        radius.
+
+        Returns
+        -------
+        float
+           The mean inverse end-to-end distance (in inverse Angstroms).
+
+        Raises
+        ------
+        AFRCException
+           If the polymer has zero length, for which the quantity is undefined.
+
+        """
+
+        if self.zero_length:
+            raise AFRCException('The mean inverse distance is undefined for a zero-length polymer')
+
+        # RMS_Re_scaling is sqrt(<Re^2>) from the composition-weighted scaling law
+        return np.sqrt(6.0/(np.pi*self.RMS_Re_scaling*self.RMS_Re_scaling))
+
+
+    # .....................................................................................
+    #
     def compute_apparent_rms_bond_length(self):
         """
         Computes the apparent root-mean-square bond length implied by the

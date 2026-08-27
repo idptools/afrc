@@ -195,31 +195,23 @@ class WormLikeChain2:
 
         p_dist = np.arange(0, prefactor*(7*np.power(self.nres,0.5)), self.p_of_r_resolution)
 
-        # initialize an empty array
-        p_val_raw = np.zeros(len(p_dist))
-
         # precompute the prefactor
         PREFACT = np.pi*self.C1*4
-        
 
-        # for each possible value of 'r'
-        for i in range(0,len(p_dist)):
-            r = p_dist[i]            
-            r2 = np.power(r,2)
-            RoL2 = np.power(r/Lc,2)
-
+        # compute P(r) across the whole grid at once. Beyond the contour length
+        # (1 - (r/Lc)^2) is negative and the expression is undefined (nan) - the
+        # chain cannot be longer than its contour length, so those points carry zero
+        # probability; the errstate silences the associated warnings
+        r2 = np.power(p_dist,2)
+        RoL2 = np.power(p_dist/Lc,2)
+        with np.errstate(divide='ignore', invalid='ignore', over='ignore'):
             LHS = (PREFACT*r2) / (Lc*np.power((1-RoL2),9/2))
             RHS = (-3*Lc) / (4*Lp*(1-RoL2))
+            p_val_raw = LHS*np.exp(RHS)
 
-            p_r = LHS*np.exp(RHS)
+        p_val_raw = np.nan_to_num(p_val_raw, nan=0.0, posinf=0.0, neginf=0.0)
+        p_val_raw[p_dist >= Lc] = 0.0
 
-            if np.isnan(p_r):
-                p_val_raw[i] = 0
-            else:
-                p_val_raw[i] = p_r
-
-            
-            
         # finally normalize so sums to 1.0 and assign to the object
         self.__p_of_Re_P = p_val_raw/np.sum(p_val_raw)
         self.__p_of_Re_R = p_dist

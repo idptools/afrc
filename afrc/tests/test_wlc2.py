@@ -75,3 +75,12 @@ def test_rejects_chain_shorter_than_persistence_length():
 def test_rejects_non_positive_lp(all_aa):
     with pytest.raises(wlc2.WLC2Exception):
         wlc2.WormLikeChain2(all_aa, lp=-1)
+
+
+def test_no_probability_at_or_beyond_contour_length():
+    """The O'Brien expression is undefined for r >= Lc; those points carry no weight."""
+    n, b = 5, 3.8
+    dist, prob = wlc2.WormLikeChain2('A' * n, aa_size=b).get_end_to_end_distribution()
+    assert np.all(np.isfinite(prob))
+    assert np.sum(prob[dist >= n * b]) == 0.0
+    assert np.sum(prob) == pytest.approx(1.0)

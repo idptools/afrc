@@ -89,3 +89,27 @@ def test_sampling_sizes(all_aa):
     po = PolymerObject(all_aa)
     assert len(po.sample_end_to_end_distribution(64)) == 64
     assert len(po.sample_radius_of_gyration_distribution(64)) == 64
+
+
+def test_mean_inverse_distance_matches_numerical_integration(all_aa):
+    """<1/r> = sqrt(6 / (pi <r^2>)) should agree with sum(P(r)/r) over the distribution."""
+    from afrc.polymer import PolymerObject
+    po = PolymerObject(all_aa)
+    dist, prob = po.get_end_to_end_distribution()
+    numeric = np.sum(prob[1:] / dist[1:])
+    assert po.get_mean_inverse_end_to_end_distance() == pytest.approx(numeric, rel=1e-3)
+
+
+def test_mean_inverse_distance_is_not_inverse_of_mean(all_aa):
+    """For a Gaussian chain <1/r> * <r> = 4/pi, not 1."""
+    from afrc.polymer import PolymerObject
+    po = PolymerObject(all_aa)
+    product = po.get_mean_inverse_end_to_end_distance() * po.get_mean_end_to_end_distance('distribution')
+    assert product == pytest.approx(4 / np.pi, rel=1e-3)
+
+
+def test_mean_inverse_distance_zero_length_raises():
+    from afrc.polymer import PolymerObject
+    from afrc.exceptions import AFRCException
+    with pytest.raises(AFRCException):
+        PolymerObject('').get_mean_inverse_end_to_end_distance()

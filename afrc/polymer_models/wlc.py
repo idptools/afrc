@@ -13,6 +13,13 @@ class WormLikeChain:
     numerical stability at large contour lengths. Unlike the O'Brien model this model does not
     provide an estimation of the mean Rg.
 
+    Note that the underlying expression is a series expansion in :math:`L_p/L_c` and
+    :math:`r/L_c`, so it is only accurate when the contour length comfortably exceeds the
+    persistence length (for the default parameters this means chains of more than ~10-20
+    residues). Probability is never assigned beyond the contour length, and a chain too
+    short for the expansion to have any valid region raises a WLCException when the
+    distribution is requested.
+
     Zhou, H.-X. (2004). Polymer models of protein stability, folding, and interactions. 
     Biochemistry, 43(8), 2141–2154.
 
@@ -167,43 +174,56 @@ class WormLikeChain:
         Lp = self.lp
         Lc = self.nres*self.b
 
-        # use same pdist as was used for the parent AFRC model 
-        p_dist = np.arange(0,3*(7*np.power(self.nres,0.5)), self.p_of_r_resolution)
-
-        # initialize an empty array
-        p_val_raw = np.zeros(len(p_dist))
+        # use the same r-grid as the parent AFRC model, but make sure it always extends
+        # to at least four times the ideal-chain size scale sqrt(<r^2>) = sqrt(2*Lp*Lc).
+        # The AFRC grid (21*sqrt(N)) is comfortably wide for the default lp = 3 A, but
+        # for stiffer chains (lp of ~6 A and above) it cut into the tail of P(r) and
+        # biased the mean and RMS values low
+        upper = max(3*(7*np.power(self.nres, 0.5)), 4*np.sqrt(2*Lp*Lc))
+        p_dist = np.arange(0, upper, self.p_of_r_resolution)
 
         # precompute the prefactor
         prefactor_A = 4*np.pi*np.power(3.0/(4*np.pi*Lp*Lc),1.5)
-        
 
-        # define a function that depends on 'r'
-        def zeta(r):
-            return (1 - ((5*Lp/(4*Lc)) -
-                         ((2*np.power(r,2))/(np.power(Lc,2))) +
-                         ((33*np.power(r,4))/(80*Lp*np.power(Lc,3))) +
-                         ((79*np.power(Lp,2))/(160*np.power(Lc,2))) +
-                         ((329*Lp*np.power(r,2))/(120*np.power(Lc,3))) -
-                         ((6799*np.power(r,4))/(1600*np.power(Lc,4))) +
-                         ((3441*np.power(r,6))/(2800*Lp*np.power(Lc,5))) -
-                         ((1089*np.power(r,8))/(12800*np.power(Lp,2)*np.power(Lc,6)))))
-            
-            
-        # for each possible value of 'r'
-        for i in range(0,len(p_dist)):
-            r = p_dist[i]            
+        # the polynomial correction series (equation 5b in Zhou 2004), evaluated across
+        # the whole grid at once. Note the overall '1 - (...)' - the signs inside the
+        # bracket are as written by Zhou, and this form reproduces the exact WLC
+        # <r^2> = 2*Lp*Lc - 2*Lp^2*(1 - exp(-Lc/Lp)) to machine precision
+        r = p_dist
+        zeta = (1 - ((5*Lp/(4*Lc)) -
+                     ((2*np.power(r,2))/(np.power(Lc,2))) +
+                     ((33*np.power(r,4))/(80*Lp*np.power(Lc,3))) +
+                     ((79*np.power(Lp,2))/(160*np.power(Lc,2))) +
+                     ((329*Lp*np.power(r,2))/(120*np.power(Lc,3))) -
+                     ((6799*np.power(r,4))/(1600*np.power(Lc,4))) +
+                     ((3441*np.power(r,6))/(2800*Lp*np.power(Lc,5))) -
+                     ((1089*np.power(r,8))/(12800*np.power(Lp,2)*np.power(Lc,6)))))
 
-            # compute P(r) at (r) based on the equations 5a/b in Zhou et al 2004
-            p_val_raw[i] = prefactor_A*np.power(r,2)*np.exp(-3.0*(np.power(r,2))/(4*Lp*Lc))*zeta(r)
+        # compute P(r) across the grid based on equations 5a/b in Zhou et al 2004
+        p_val_raw = prefactor_A*np.power(r,2)*np.exp(-3.0*(np.power(r,2))/(4*Lp*Lc))*zeta
 
+        # the end-to-end distance of a chain can never exceed its contour length. The
+        # Zhou series is an expansion in Lp/Lc and r/Lc and is simply not meaningful
+        # beyond r = Lc, where (for short and/or stiff chains) it can return substantial
+        # positive values - for a 2-residue chain at lp = 3 A around 30% of the weight
+        # sat beyond the contour length. Zero that region explicitly
+        p_val_raw[r > Lc] = 0.0
 
-        # the Zhou series expansion (zeta) is only valid for r up to the contour
-        # length and can produce spurious negative values in the far tail; clamp
-        # these to zero so the result is a valid probability distribution
+        # the series can also produce spurious negative values in the far tail below Lc;
+        # clamp these to zero so the result is a valid probability distribution
         p_val_raw[p_val_raw < 0] = 0.0
 
+        # if nothing survives the two steps above the expansion has no valid region at
+        # all - this happens when the contour length is comparable to or shorter than
+        # the persistence length (a couple of residues at a large lp), which is outside
+        # the regime the Zhou expansion is derived for. Fail loudly rather than
+        # returning a NaN-filled distribution
+        total = np.sum(p_val_raw)
+        if not total > 0:
+            raise WLCException('The Zhou (2004) worm-like chain expansion is not valid for a chain whose contour length (%.2f A) is comparable to or shorter than the persistence length (%.2f A)' % (Lc, Lp))
+
         # finally normalize so sums to 1.0 and assign to the object
-        self.__p_of_Re_P = p_val_raw/np.sum(p_val_raw)
+        self.__p_of_Re_P = p_val_raw/total
         self.__p_of_Re_R = p_dist
 
 

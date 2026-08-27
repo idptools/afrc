@@ -98,6 +98,13 @@ def test_internal_scaling_exponent(protein):
     assert slope == pytest.approx(0.5, abs=0.01)
 
 
+def test_internal_scaling_shape(protein):
+    """One row per sequence separation |i-j| = 1 ... n-1, columns [|i-j|, <r>]."""
+    iscaling = protein.get_internal_scaling()
+    assert iscaling.shape == (len(protein) - 1, 2)
+    assert np.array_equal(iscaling[:, 0], np.arange(1, len(protein)))
+
+
 def test_rg_scaling_law_and_distribution_agree(protein):
     """The two ways of computing <Rg> should give effectively the same answer.
 
@@ -187,6 +194,20 @@ def test_contact_fraction_monotonic_in_threshold(protein):
     assert high >= low
 
 
+def test_contact_fraction_below_grid_resolution(protein):
+    """Regression: a threshold below one grid step raised an IndexError."""
+    assert protein.get_contact_fraction(10, 40, 0.01) == 0.0
+    assert protein.get_contact_fraction(10, 40, protein.p_of_r_resolution) == 0.0
+
+
+def test_contact_fraction_validates_indices(protein):
+    """Indices are checked even for the R1 == R2 short-circuit."""
+    with pytest.raises(AFRCException):
+        protein.get_contact_fraction(-1, -1, 5.0)
+    with pytest.raises(AFRCException):
+        protein.get_contact_fraction(0, len(protein), 5.0)
+
+
 def test_contact_map_shape(all_aa):
     p = afrc.AnalyticalFRC(all_aa)
     cm = p.get_contact_map(15.0)
@@ -203,6 +224,37 @@ def test_hydrodynamic_radius_modes(protein):
     rh_ny = protein.get_mean_hydrodynamic_radius('nygaard')
     assert rh_kr > 0
     assert rh_ny > 0
+
+
+def test_kirkwood_riseman_averages_inverse_distances(protein):
+    """Regression: Rh was 1/<r_ij> (the inverse of the mean distance) rather than
+    the Kirkwood-Riseman 1/<1/r_ij>; for a Gaussian chain those differ by 4/pi."""
+    n = len(protein)
+    dm = protein.get_distance_map()  # also builds the inter-residue matrix
+    inv = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            rms = protein.matrix[i][j].RMS_Re_scaling
+            inv.append(np.sqrt(6 / (np.pi * rms**2)))
+    expected = 1 / np.mean(inv)
+    rh = protein.get_mean_hydrodynamic_radius('kirkwood-riseman')
+    assert rh == pytest.approx(expected, rel=1e-12)
+
+    # the old estimator, for the record: inverse of the mean distance
+    old = 1 / np.mean(1 / dm[dm != 0])
+    assert old / rh == pytest.approx(4 / np.pi, rel=0.01)
+
+
+def test_kirkwood_riseman_rg_over_rh_is_theta_like(protein):
+    """For an ideal chain Rg/Rh from Kirkwood-Riseman sits around 1.3-1.5."""
+    rg = protein.get_mean_radius_of_gyration()
+    rh = protein.get_mean_hydrodynamic_radius('kirkwood-riseman')
+    assert 1.2 < rg / rh < 1.6
+
+
+def test_kirkwood_riseman_needs_two_residues():
+    with pytest.raises(AFRCException):
+        afrc.AnalyticalFRC('A').get_mean_hydrodynamic_radius('kirkwood-riseman')
 
 
 def test_hydrodynamic_radius_invalid_mode(protein):
@@ -225,6 +277,8 @@ def test_pre_profile_boundary_rejected(protein):
         protein.get_pre_profile(len(protein))
     with pytest.raises(AFRCException):
         protein.get_pre_profile(-1)
+    with pytest.raises(AFRCException):
+        protein.get_pre_profile('abc')
 
 
 # ---------------------------------------------------------------------------
@@ -260,5 +314,5 @@ def test_golden_mean_values(protein):
     assert protein.get_mean_radius_of_gyration('scaling law') == pytest.approx(30.80498415230296, abs=1e-6)
     assert protein.get_mean_end_to_end_distance() == pytest.approx(71.87265559462539, abs=1e-6)
     assert protein.get_mean_end_to_end_distance('distribution') == pytest.approx(71.73705605088517, abs=1e-4)
-    assert protein.get_mean_hydrodynamic_radius('kirkwood-riseman') == pytest.approx(29.346190022800343, abs=1e-4)
+    assert protein.get_mean_hydrodynamic_radius('kirkwood-riseman') == pytest.approx(23.004186945112636, abs=1e-4)
     assert protein.get_mean_hydrodynamic_radius('nygaard') == pytest.approx(32.27795915772518, abs=1e-4)

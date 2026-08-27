@@ -97,9 +97,25 @@ Lhuillier fits. The two routes agree to well within a percent.
    *root-mean-square* radii; applied to the mean end-to-end distance it under-estimates
    :math:`\langle R_g \rangle` by around 5%.
 
-**Hydrodynamic radius.** :math:`R_h` is available either from the Kirkwood-Riseman relation
-applied to the full inter-residue distance map, or from the empirical :math:`R_g \to R_h`
-conversion of Nygaard et al. (2017).
+**Hydrodynamic radius.** :math:`R_h` is available either from the Kirkwood-Riseman
+relation or from the empirical :math:`R_g \to R_h` conversion of Nygaard et al. (2017).
+The Kirkwood-Riseman estimate is
+
+.. math::
+
+   R_h = \left\langle \frac{1}{r_{ij}} \right\rangle_{i \neq j}^{-1},
+   \qquad
+   \left\langle \frac{1}{r_{ij}} \right\rangle = \sqrt{\frac{6}{\pi \langle r_{ij}^2 \rangle}},
+
+where the outer average runs over every pair of residues and the inner one is the exact
+mean *inverse* distance for the Gaussian inter-residue distribution (obtained by
+integrating :math:`P(r)/r`). This is the same form used by Nygaard et al. (2017), Pesce et
+al. (2023) and SOURSOP. It is worth stressing that the Kirkwood-Riseman equation averages
+:math:`1/r_{ij}`, not :math:`r_{ij}`: for a Gaussian chain
+:math:`\langle 1/r \rangle = (4/\pi)\, / \langle r \rangle`, so using the inverse of the mean
+distance would over-estimate :math:`R_h` by 27%. For an ideal chain this gives
+:math:`R_g / R_h \approx 1.3`-:math:`1.4`, in line with the theta-state expectation and
+noticeably larger than the empirical Nygaard value for sequences of typical IDR length.
 
 Because the model also exposes every inter-residue distance, it additionally provides distance
 maps, contact-fraction maps, and per-residue PRE profiles for the same theta-state reference.
@@ -176,3 +192,7 @@ Citations
    *Biophysical Journal*, 113(3), 550-557.
 7. Kirkwood, J. G., & Riseman, J. (1948). The intrinsic viscosities and diffusion constants
    of flexible macromolecules in solution. *The Journal of Chemical Physics*, 16(6), 565-573.
+8. Pesce, F., Newcombe, E. A., Seiffert, P., Tranchant, E. E., Olsen, J. G., Grace, C. R.,
+   Kragelund, B. B., & Lindorff-Larsen, K. (2023). Assessment of models for calculating the
+   hydrodynamic radius of intrinsically disordered proteins. *Biophysical Journal*, 122(2),
+   310-321.

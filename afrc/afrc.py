@@ -260,8 +260,8 @@ class AnalyticalFRC:
     #
     def get_internal_scaling(self, calculation_mode='scaling law'):
         """
-        Returns the internal scaling profile - a [2 by n] matrix that reports on the average
-        distance between all residues that are n positions apart ( where n  is | i - j | ). 
+        Returns the internal scaling profile - an [n-1 by 2] matrix that reports on the average
+        distance between all residues that are k positions apart (where k is :math:`|i - j|`). 
 
         Distances are in angstroms and are measured from the residue center of mass.
 
@@ -279,10 +279,10 @@ class AnalyticalFRC:
         Returns
         -------
         np.ndarray
-           An [2 x n] matrix (where n = length of the amino acid sequence). The first column
-           is the set of | i-j | distances, and the second defines the average inter-residue 
-           distances between every pair of residues that are | i-j | residues apart in sequence
-           space.
+           An [n-1 x 2] matrix (where n = length of the amino acid sequence), with one row
+           per sequence separation | i-j | from 1 to n-1. The first column is the set of
+           | i-j | separations, and the second defines the average inter-residue distance
+           between every pair of residues that are | i-j | residues apart in sequence space.
         
         """
 
@@ -419,6 +419,25 @@ class AnalyticalFRC:
         Returns the average hydrodynamic radius, calculated either using the Kirkwood-Riseman
         equation or using the empirical Rg-to-Rh conversion scheme developed by Nygaard et al.
 
+        In "kirkwood-riseman" mode the hydrodynamic radius is
+
+        .. math::
+
+           R_h = \\left\\langle \\frac{1}{r_{ij}} \\right\\rangle_{i \\neq j}^{-1}
+
+        where the average runs over every pair of residues in the chain and, for each
+        pair, over the AFRC's Gaussian inter-residue distance distribution. That inner
+        average has the closed form :math:`\\langle 1/r_{ij} \\rangle = \\sqrt{6 / (\\pi
+        \\langle r_{ij}^2 \\rangle)}`, so the result is exact for the model - no numerical
+        integration is involved. Note that this is the mean of the *inverse* distance, as
+        the Kirkwood-Riseman equation requires; it is not the inverse of the mean
+        distance (for a Gaussian chain the two differ by a factor of :math:`4/\\pi`).
+        This is the same form of the equation used by Nygaard et al. [1] and Pesce et al.
+        [3], and by the ``mode='kr'`` option in SOURSOP.
+
+        In "nygaard" mode the empirical relationship between :math:`R_g`, :math:`R_h` and
+        chain length from Nygaard et al. [1] is applied to the mean radius of gyration.
+
         Parameters
         ----------
 
@@ -431,6 +450,12 @@ class AnalyticalFRC:
         float
            Value equal to the average hydrodynamic radius (in Angstroms).
 
+        Raises
+        ------
+        AFRCException
+           If "kirkwood-riseman" is requested for a chain with fewer than two residues
+           (there are no inter-residue distances to average over).
+
         References
         -------------
         [1] Nygaard M, Kragelund BB, Papaleo E, Lindorff-Larsen K. An Efficient
@@ -440,6 +465,12 @@ class AnalyticalFRC:
         [2] Kirkwood, J. G., & Riseman, J. (1948). The Intrinsic Viscosities
         and Diffusion Constants of Flexible Macromolecules in Solution.
         The Journal of Chemical Physics, 16(6), 565–573.
+
+        [3] Pesce, F., Newcombe, E. A., Seiffert, P., Tranchant, E. E.,
+        Olsen, J. G., Grace, C. R., Kragelund, B. B., & Lindorff-Larsen, K.
+        (2023). Assessment of models for calculating the hydrodynamic radius
+        of intrinsically disordered proteins. Biophysical Journal, 122(2),
+        310-321.
 
 
         """
@@ -467,8 +498,25 @@ class AnalyticalFRC:
 
         elif calculation_mode == 'kirkwood-riseman':
 
-            DM = self.get_distance_map()
-            return 1/np.mean(1/DM[DM!=0])        
+            n = len(self)
+            if n < 2:
+                raise AFRCException('The Kirkwood-Riseman hydrodynamic radius requires a chain of at least two residues')
+
+            # the Kirkwood-Riseman equation averages the INVERSE inter-residue
+            # distance, <1/r_ij>, over every pair of residues. Each PolymerObject in
+            # the inter-residue matrix knows its own <1/r> exactly (closed form for
+            # the Gaussian distribution), so we simply average those over the
+            # non-redundant pairs and invert. Note this deliberately does not use
+            # the distance map: 1/<r_ij> is a different quantity, and for a Gaussian
+            # chain over-estimates Rh by a factor of 4/pi
+            self.__build_matrix()
+
+            inverse_distances = []
+            for i in range(0, n):
+                for j in range(i+1, n):
+                    inverse_distances.append(self.matrix[i][j].get_mean_inverse_end_to_end_distance())
+
+            return 1.0/np.mean(inverse_distances)
 
     # .....................................................................................
     #
@@ -716,6 +764,11 @@ class AnalyticalFRC:
 
         """
 
+        # validate the indices up front so that an invalid pair is rejected even when
+        # R1 == R2 (which otherwise short-circuits below)
+        R1 = self.__validate_residue_index(R1)
+        R2 = self.__validate_residue_index(R2)
+
         if R1 == R2:
             return 1.0
         
@@ -736,6 +789,12 @@ class AnalyticalFRC:
         # we're going to integrate over
         xval = interres_dist[0][:idx_max + 1]
         yval = interres_dist[1][:idx_max + 1]
+
+        # if only the first (r = 0) bin lies below the threshold there is nothing to
+        # integrate over, so just return the weight in that bin (which is zero for any
+        # non-degenerate distribution, because P(r) carries an r^2 prefactor)
+        if len(xval) < 2:
+            return float(yval[0])
     
         # dx which is prefactor for normalization
         dx = xval[1]-xval[0]
@@ -869,8 +928,9 @@ class AnalyticalFRC:
 
         """
 
-        if label_position < 0 or label_position >= len(self.seq):
-            raise AFRCException(f'Passed invalid label position - must be between 0 and {len(self.seq)-1}')
+        # this raises an AFRCException for a negative, out-of-range or non-integer
+        # label position (rather than a TypeError for e.g. a string)
+        label_position = self.__validate_residue_index(label_position)
         
         # local constants (show in a couple of units for clarity...)
         original_K = 1.2300e-32       # K constant in cm6*s-2

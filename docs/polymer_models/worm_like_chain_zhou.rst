@@ -20,10 +20,16 @@ With contour length :math:`L_c = N b`, the end-to-end distribution is
 
 where the Gaussian core corresponds to the flexible-limit WLC result
 :math:`\langle R^2 \rangle = 2 L_p L_c`, and :math:`\zeta(r)` is the polynomial correction
-series of Zhou (2004, Eq. 5) in powers of :math:`r/L_c`, :math:`L_p/L_c`. The series is
-accurate for :math:`r` up to about the contour length; spurious negative values in the far
-tail are clamped to zero so the result remains a valid probability distribution. Mean and
-root-mean-square end-to-end distances are obtained by numerical integration over
+series of Zhou (2004, Eq. 5) in powers of :math:`r/L_c`, :math:`L_p/L_c`. Because it is an
+expansion, the series is only accurate when :math:`L_c \gg L_p` - with the default
+parameters that means chains of more than roughly 10-20 residues, for which the distribution
+reproduces the exact worm-like chain :math:`\langle R^2 \rangle = 2 L_p L_c - 2 L_p^2 (1 -
+e^{-L_c/L_p})` to high precision. A chain can never be longer than its contour length, so no
+probability is assigned to :math:`r > L_c`, and spurious negative values of the series below
+:math:`L_c` are clamped to zero so the result remains a valid probability distribution. If
+the contour length is comparable to or shorter than the persistence length the expansion
+has no valid region at all and requesting the distribution raises a ``WLCException``. Mean
+and root-mean-square end-to-end distances are obtained by numerical integration over
 :math:`P(r)`.
 
 Parameters
