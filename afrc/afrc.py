@@ -10,9 +10,6 @@ from .exceptions import AFRCException
 from .iofunctions import validate_keyword
 from .polymer_models import wlc
 
-# np.trapz was renamed to np.trapezoid in NumPy 2.0; fall back for older NumPy
-_trapezoid = getattr(np, "trapezoid", getattr(np, "trapz", None))
-
 # AFRCException is defined in exceptions.py but re-exported here so that the
 # long-standing `from afrc.afrc import AFRCException` import path keeps working
 __all__ = ['AFRCException', 'AnalyticalFRC']
@@ -54,9 +51,9 @@ class AnalyticalFRC:
         Parameters
         ----------
         seq : str
-            Amino acid sequence for the protein of interest (case insensitive). 
-            If this is an invalid string it will raise an AFRCException.
-            
+            Amino acid sequence for the protein of interest (case insensitive).
+            If this is an invalid (or empty) string it will raise an AFRCException.
+
         adaptable_P_res : Bool (False)
            Sets the resolution used for generating probability distributions. 
            By default this is assigned to a fixed value (0.05 A). However, if 
@@ -71,9 +68,17 @@ class AnalyticalFRC:
             seq = seq.upper()
         except AttributeError:
             raise AFRCException('Input must be a string of amino acids')
-            
-        # check a valid string was passed and assign to object variable 
-        self.__check_seq_is_valid(seq)            
+
+        # an empty sequence has no polymer to describe. Rather than let it through
+        # (where most quantities silently come out as 0 and the Nygaard Rh as NaN)
+        # reject it here. Note that zero-length PolymerObjects are still used
+        # internally for the diagonal of the inter-residue matrix - that is
+        # deliberate and unaffected by this check
+        if len(seq) == 0:
+            raise AFRCException('Input sequence must contain at least one amino acid')
+
+        # check a valid string was passed and assign to object variable
+        self.__check_seq_is_valid(seq)
         self.seq = seq 
 
         # set up what our P of R spacing will look like...
@@ -453,8 +458,10 @@ class AnalyticalFRC:
         Raises
         ------
         AFRCException
-           If "kirkwood-riseman" is requested for a chain with fewer than two residues
-           (there are no inter-residue distances to average over).
+           If the chain has fewer than two residues. In "kirkwood-riseman" mode there
+           are then no inter-residue distances to average over, and in "nygaard" mode
+           the :math:`N^{0.60} - N^{0.33}` denominator of the empirical relationship
+           vanishes.
 
         References
         -------------
@@ -477,6 +484,13 @@ class AnalyticalFRC:
 
         calculation_mode = validate_keyword(['kirkwood-riseman','nygaard'], calculation_mode, 'calculation_mode')
 
+        # neither estimator is defined for a single residue: Kirkwood-Riseman has no
+        # residue pairs to average over, and the Nygaard denominator N^0.6 - N^0.33 is
+        # zero at N = 1 (which previously returned -0.0 with a divide-by-zero warning)
+        n = len(self)
+        if n < 2:
+            raise AFRCException('The hydrodynamic radius requires a chain of at least two residues')
+
         if calculation_mode == 'nygaard':
 
             alpha1 = 0.216
@@ -485,8 +499,6 @@ class AnalyticalFRC:
 
             # first compute the rg
             rg = self.get_mean_radius_of_gyration()
-
-            n = len(self)
 
             # precompute
             N_033 = np.power(n, 0.33)
@@ -497,10 +509,6 @@ class AnalyticalFRC:
             return (1/Rg_over_Rh)*rg
 
         elif calculation_mode == 'kirkwood-riseman':
-
-            n = len(self)
-            if n < 2:
-                raise AFRCException('The Kirkwood-Riseman hydrodynamic radius requires a chain of at least two residues')
 
             # the Kirkwood-Riseman equation averages the INVERSE inter-residue
             # distance, <1/r_ij>, over every pair of residues. Each PolymerObject in
@@ -771,37 +779,18 @@ class AnalyticalFRC:
 
         if R1 == R2:
             return 1.0
-        
-        # get the distribution of inter-residue distances 
-        interres_dist = self.get_interresidue_distance_distribution(R1, R2)
 
-        # build a list where of truth values where each element is true or false (true if val < thresh)
-        t = interres_dist[0] < threshold
-    
-        # find largest index from the truth vals
-        if not np.any(t):  # Fast exit if no values meet threshold
-            return 0.0
-        
-        idx_max = np.where(t)[0][-1]  # Last index where condition is True
-    
-        # get xvals and y vals that we want to integrate over - i.e. we assume we're going to calculate
-        # the finite integral from 0 -> idx_max, so this is basically defining the region of a curve
-        # we're going to integrate over
-        xval = interres_dist[0][:idx_max + 1]
-        yval = interres_dist[1][:idx_max + 1]
+        # get the distribution of inter-residue distances
+        (r, p) = self.get_interresidue_distance_distribution(R1, R2)
 
-        # if only the first (r = 0) bin lies below the threshold there is nothing to
-        # integrate over, so just return the weight in that bin (which is zero for any
-        # non-degenerate distribution, because P(r) carries an r^2 prefactor)
-        if len(xval) < 2:
-            return float(yval[0])
-    
-        # dx which is prefactor for normalization
-        dx = xval[1]-xval[0]
-    
-        area_under_curve = _trapezoid(yval, dx=dx)/dx
-            
-        return area_under_curve
+        # p is a normalized probability MASS function (each bin holds the weight
+        # of the interval [r, r + dr)), so the contact fraction is simply the
+        # cumulative weight in the bins that lie below the threshold. Note this
+        # was previously evaluated with the trapezoid rule, which halves the two
+        # end bins and so systematically under-counted by half a bin's weight -
+        # a ~1.5% relative error at a 5 A threshold on the default 0.05 A grid,
+        # and considerably worse on the coarser adaptable grid
+        return float(np.sum(p[r < threshold]))
         
     # .....................................................................................
     #
@@ -843,7 +832,7 @@ class AnalyticalFRC:
 
 
         
-    def get_pre_profile(self, label_position, tau_c=4, t_delay=12, R_2D=14, W_H=600000000, sample_size=10000):
+    def get_pre_profile(self, label_position, tau_c=4, t_delay=12, R_2D=14, W_H=2*np.pi*600e6, sample_size=10000):
         """
         Calculate the hypothetical paramagnetic relaxation enhancement (PRE) profile
         expected if a spin label were placed at position label_position. The
@@ -871,16 +860,21 @@ class AnalyticalFRC:
             but is typically around 1-30 ms for HSQC. Default = 12
 
         R_2D : float
-            Is the transverse relaxation rate of the backbone amide protons in 
-            the diamagnetic form of the protein, measured in Herz (i.e. 'per 
+            Is the transverse relaxation rate of the backbone amide protons in
+            the diamagnetic form of the protein, measured in Hertz (i.e. 'per
             second'). A value of around 10 might be expected. Default = 14
 
         W_H : float
-            Is the proton Larmor frequency, which is typically the "MHz" value
-            associated with the magnet, given in Hz. For example, a 600 MHz
-            magnet would use the value 600000000. Note that the proton 
-            Larmor frequency at 1 Tesla = 267530000 per second per Tesla.
-            Default = 600000000
+            Is the proton Larmor frequency as an *angular* frequency, in rad/s
+            (:math:`\\omega_H = 2\\pi\\nu_H`). The spectral-density term of the
+            Solomon-Bloembergen prefactor evaluates
+            :math:`3\\tau_c/(1 + \\omega_H^2 \\tau_c^2)`, so the value passed here
+            is used directly as the angular frequency. For a 600 MHz magnet pass
+            ``2*np.pi*600e6`` (approximately 3.77e9), **not** ``600000000``;
+            passing the linear frequency makes the dispersive term a factor of
+            :math:`(2\\pi)^2 \\approx 39.5` too small, over-estimating gamma by
+            roughly 10% at the default tau_c. This is the same convention used by
+            SOURSOP's ``SSPRE`` class. Default = 2*pi*600e6 (a 600 MHz magnet)
 
         sample_size : int
             Number of conformations drawn from each inter-residue distance

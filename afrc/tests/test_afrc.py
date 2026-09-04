@@ -316,3 +316,83 @@ def test_golden_mean_values(protein):
     assert protein.get_mean_end_to_end_distance('distribution') == pytest.approx(71.73705605088517, abs=1e-4)
     assert protein.get_mean_hydrodynamic_radius('kirkwood-riseman') == pytest.approx(23.004186945112636, abs=1e-4)
     assert protein.get_mean_hydrodynamic_radius('nygaard') == pytest.approx(32.27795915772518, abs=1e-4)
+
+
+# ---------------------------------------------------------------------------
+# 0.4.3 regressions: degenerate chains, contact-fraction estimator, PRE units
+# ---------------------------------------------------------------------------
+def test_empty_sequence_rejected():
+    """Regression: an empty sequence was accepted and gave NaN/zero results."""
+    with pytest.raises(AFRCException):
+        afrc.AnalyticalFRC('')
+
+
+def test_hydrodynamic_radius_needs_two_residues_in_both_modes():
+    """Regression: Nygaard mode returned -0.0 (with a divide-by-zero) for N = 1."""
+    p = afrc.AnalyticalFRC('A')
+    with pytest.raises(AFRCException):
+        p.get_mean_hydrodynamic_radius('nygaard')
+    with pytest.raises(AFRCException):
+        p.get_mean_hydrodynamic_radius('kirkwood-riseman')
+
+
+def test_contact_fraction_is_cumulative_bin_weight(protein):
+    """The contact fraction is the total weight of the bins below the threshold."""
+    r, p = protein.get_interresidue_distance_distribution(10, 40)
+    for threshold in (5.0, 12.5, 30.0):
+        expected = np.sum(p[r < threshold])
+        assert protein.get_contact_fraction(10, 40, threshold) == pytest.approx(expected, rel=1e-12)
+    # and a threshold beyond the grid captures everything
+    assert protein.get_contact_fraction(10, 40, 1e6) == pytest.approx(1.0, rel=1e-9)
+
+
+def test_contact_fraction_matches_gaussian_cdf():
+    """
+    Regression: the trapezoid estimator dropped half the last bin, biasing the
+    fraction low by ~1.5% at a 5 A threshold. The binned cumulative sum should
+    track the analytical Gaussian-chain CDF to well inside 2% even at that
+    small threshold (the residual is the left-Riemann discretisation of P(r)).
+    """
+    from scipy.special import erf
+
+    p = afrc.AnalyticalFRC('A'*30)
+    # force the inter-residue matrix to exist, then read the pair's <r^2>
+    p.get_interresidue_distance_distribution(0, 29)
+    mean_sq = p.matrix[0][29].RMS_Re_scaling**2
+    sigma = np.sqrt(mean_sq/3.0)
+
+    def gaussian_cdf(x):
+        z = x/sigma
+        return erf(z/np.sqrt(2)) - np.sqrt(2/np.pi)*z*np.exp(-z*z/2)
+
+    for threshold, tol in ((5.0, 0.02), (10.0, 0.01), (20.0, 0.005), (40.0, 0.002)):
+        assert p.get_contact_fraction(0, 29, threshold) == pytest.approx(gaussian_cdf(threshold), rel=tol)
+
+
+def test_pre_profile_uses_angular_larmor_frequency(protein):
+    """
+    Regression: W_H defaulted to the linear proton frequency (600 MHz -> 6e8), but
+    the Solomon-Bloembergen spectral-density term needs the angular frequency
+    (2*pi*6e8). The default must equal the explicit angular value, and passing the
+    linear value must inflate gamma by exactly the hand-computed prefactor ratio.
+    """
+    tau_c = 4e-9
+    nu_H = 600e6
+
+    def prefactor(omega):
+        return 4*tau_c + 3*tau_c/(1 + (omega*tau_c)**2)
+
+    np.random.seed(7)
+    default_run = protein.get_pre_profile(0, sample_size=300)
+    np.random.seed(7)
+    angular_run = protein.get_pre_profile(0, W_H=2*np.pi*nu_H, sample_size=300)
+    np.random.seed(7)
+    linear_run = protein.get_pre_profile(0, W_H=nu_H, sample_size=300)
+
+    # identical sampling, so the default and explicit-angular gamma arrays must match exactly
+    assert np.array_equal(default_run[2][5], angular_run[2][5])
+
+    # and the linear/angular ratio is the ratio of the two prefactors (~1.107 at tau_c = 4 ns)
+    expected_ratio = prefactor(nu_H)/prefactor(2*np.pi*nu_H)
+    assert expected_ratio > 1.05
+    assert np.allclose(linear_run[2][5]/angular_run[2][5], expected_ratio, rtol=1e-9)
