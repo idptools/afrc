@@ -17,7 +17,7 @@ Quick start
 
    model.get_mean_end_to_end_distance()
    model.get_root_mean_squared_end_to_end_distance()
-   model.get_mean_radius_of_gyration()       # closed-form Rg (unique to this model)
+   model.get_mean_radius_of_gyration()       # closed-form root-mean-square Rg
 
    r, p = model.get_end_to_end_distribution()
 

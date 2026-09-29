@@ -1,46 +1,66 @@
+"""
+wlc2.py
+
+Worm-like chain (WLC) model using the closed form of O'Brien et al. (2009).
+
+Copyright Alex Holehouse 2018-2026 (holehouselab.com).
+
+"""
 import numpy as np
 from afrc.config import P_OF_R_RESOLUTION
 
 class WLC2Exception(Exception):
+    """Exception raised by the O'Brien worm-like chain model."""
     pass
 
 class WormLikeChain2:
     """
-    This class generates an object that returns polymer statistics consistent with the Worm-like chain
-    model as implemented by O'Brien. Provides mean Re, mean Rg, and Re distribution.
+    Worm-like chain model, as implemented by O'Brien et al. (2009).
 
+    This is a composition-independent reference model: the sequence is only used
+    to set the number of residues, and hence the contour length
+    :math:`L_c = N b`. Unlike the Zhou model (``WormLikeChain``) the O'Brien
+    expression enforces finite extensibility exactly and stays well behaved for
+    long chains, and this model also provides a closed-form radius of gyration.
 
-    [1] O’Brien, E. P., Morrison, G., Brooks, B. R., & Thirumalai, D. (2009). 
-    How accurate are polymer models in the analysis of Forster resonance 
-    energy transfer experiments on proteins? The Journal of Chemical Physics, 
+    References
+    ----------
+    [1] O'Brien, E. P., Morrison, G., Brooks, B. R., & Thirumalai, D. (2009).
+    How accurate are polymer models in the analysis of Forster resonance
+    energy transfer experiments on proteins? The Journal of Chemical Physics,
     130(12), 124903.
 
     """
 
     # .....................................................................................
-    #        
+    #
     def __init__(self, seq, p_of_r_resolution=P_OF_R_RESOLUTION, lp=3.0, aa_size=3.8):
         """
-        Method to create Polymer Object. Seq should be a valid upper-case amino acid sequence and p_of_r_resolution
-        defines the resolution (in angstroms) to be used for distributions.
-
-        By default p_of_r_resolution is taken from the config.py file in the afrc package which defines the resolution
-        at 0.05 A.
+        Create a WormLikeChain2 object.
 
         Parameters
-        -----------
+        ----------
         seq : str
-            Amino acid sequence (used only to calculate number of residues)
+            Amino acid sequence. Only its length is used, and it is not
+            validated.
 
         p_of_r_resolution : float
-            Bin width for bulding probability distributions. In Angstroms.
+            Grid spacing (in Angstroms) used for the distribution. Default is
+            0.05 A.
 
         lp : float
-            Persistence length. We use a default of 3 but 4 is also used a lot in the literature.
+            Persistence length, in Angstroms. We use a default of 3.0 A, although
+            4 A is also common in the literature. Must be > 0.
 
         aa_size : float
-            Size of one amino acid (called 'b' in the literature). 3.8 is the generally acceptable 
-            value used.
+            Contour length per residue (called :math:`b` in the literature), in
+            Angstroms. The default of 3.8 A is the Cα-Cα distance. Must be > 0.
+
+        Raises
+        ------
+        WLC2Exception
+            If ``lp`` or ``aa_size`` is not positive, or if the contour length
+            (``len(seq) * aa_size``) is shorter than the persistence length.
 
         """
 
@@ -69,63 +89,46 @@ class WormLikeChain2:
             raise WLC2Exception('Passed sequence has a contour length (%.2f A) shorter than the persistence length (%.2f A)' % (Lc, self.lp))
 
         # next calculate params as defined by O'Brien et al
-        
         self.alpha = (3*Lc) / (4*self.lp)
-        
         self.C2 = 1/(2*self.lp)
 
-        t1 = np.power(np.pi, 3/2)
-        t2 = np.exp(-self.alpha)
-        t3 = np.power(self.alpha,-3/2)
-
-        # warning - if 
-        t4 = 3*np.power(self.alpha,-1)
-        t5 = (15/4)*np.power(self.alpha,-2)
-
-        self.C1 = np.power(t1*t2*t3*(1 + t4 + t5), -1)
+        # C1 is the analytical normalization constant. Note that exp(alpha) overflows
+        # for alpha > ~709 (about 750 residues at the default lp), so we build it in
+        # log space and let it go to inf quietly for very long chains. C1 is kept for
+        # reference only - the distribution itself is evaluated in log space and
+        # normalized numerically, so it never depends on this value
+        log_C1 = self.alpha + 1.5*np.log(self.alpha) - 1.5*np.log(np.pi) - np.log(1 + 3/self.alpha + (15/4)/np.power(self.alpha, 2))
+        with np.errstate(over='ignore'):
+            self.C1 = np.exp(log_C1)
 
         # p_of_r_resolution defines the P(r) resolution in angstroms - i.e. basically
         # the spacing between r values in a P(r) vs. r plot
         self.p_of_r_resolution = p_of_r_resolution
 
-        # set distribution info to false - these are calculated if/when needed. M
+        # set distribution info to false - these are calculated if/when needed
         self.__p_of_Re_R = False
         self.__p_of_Re_P = False
 
-        # this sets a flag that is useful for letting certain functions work when
-        # there's a chain length of 0
-        if len(seq) == 0:
-            self.zero_length = True
-        else:
-            self.zero_length = False
+        # an empty sequence has zero contour length and so has already failed the
+        # contour-length check above; the flag is kept for interface parity with the
+        # other models
+        self.zero_length = False
 
 
     # .....................................................................................
-    #        
+    #
     def get_end_to_end_distribution(self):
-
         """
-        Defines the end-to-end distribution based on the Worm-like chain (WLC) as defined by
-        O'Brien et al.
+        Return the end-to-end distance distribution.
 
-        This is a composition independent model for which the end-to-end distance depends
-        solely on the number of amino acids. It is included here as an additional reference 
-        model.
+        The distribution is computed on first use and then cached.
 
         Returns
         -------
-
-        tuple of arrays
-           A 2-pair tuple of numpy arrays where the first is the distance (in Angstroms) and 
-           the second array is the probability of that distance.
-
-        References
-        -----------
-        [1] O’Brien, E. P., Morrison, G., Brooks, B. R., & Thirumalai, D. (2009). 
-        How accurate are polymer models in the analysis of Forster resonance 
-        energy transfer experiments on proteins? The Journal of Chemical Physics, 
-        130(12), 124903.
-
+        tuple of np.ndarray
+            ``(distances, probabilities)``, where distances are in Angstroms and
+            the probabilities are a normalized probability mass function (they
+            sum to 1). No probability lies at or beyond the contour length.
 
         """
         if self.__p_of_Re_R is False:
@@ -135,18 +138,18 @@ class WormLikeChain2:
 
 
     # .....................................................................................
-    #        
+    #
     def get_mean_end_to_end_distance(self):
         """
-        Returns the mean end-to-end distance (:math:`R_e`). As calculated from the Worm-like
-        chain (WLC) model as defined by O'brien et al.
+        Return the mean end-to-end distance, :math:`\\langle R_e \\rangle`.
 
-        Note, the mean here is calculated by integrating over P(r) vs r.
-        
+        This is the expectation over the end-to-end distribution,
+        :math:`\\sum r P(r)`.
+
         Returns
         -------
         float
-           Value equal to the mean end-to-end distance distribution
+            The mean end-to-end distance (in Angstroms).
 
         """
         [a,b] = self.get_end_to_end_distribution()
@@ -155,18 +158,19 @@ class WormLikeChain2:
 
 
     # .....................................................................................
-    #        
+    #
     def get_root_mean_squared_end_to_end_distance(self):
         """
-        Returns the mean end-to-end distance (:math:`R_e`). As calculated from the Worm-like
-        chain (WLC) model as defined by O'brien et al.
+        Return the root-mean-square end-to-end distance,
+        :math:`\\sqrt{\\langle R_e^2 \\rangle}`.
 
-        Note mean here is calculated by taking the square root after integrating over P(r) vs r^2.
-        
+        This is the square root of :math:`\\sum r^2 P(r)` over the end-to-end
+        distribution.
+
         Returns
         -------
         float
-           Value equal to the root-mean-squared end-to-end distance
+            The root-mean-square end-to-end distance (in Angstroms).
 
         """
 
@@ -177,40 +181,58 @@ class WormLikeChain2:
 
 
     # .....................................................................................
-    #        
+    #
     def __compute_end_to_end_distribution(self):
         """
-        Defines the end-to-end distribution based on the Worm-like chain (WLC) as defined by
-        O'Brien. This is where we actually perform the polymer model calculation.
+        Build and cache the end-to-end distribution.
+
+        With :math:`x = r/L_c` and :math:`\\alpha = 3L_c/(4L_p)`, the O'Brien
+        expression is
+
+        .. math::
+
+           P(r) = \\frac{4\\pi C_1 r^2}{L_c^3 (1 - x^2)^{9/2}}
+                  \\exp\\left( -\\frac{\\alpha}{1 - x^2} \\right)
+
+        We evaluate its logarithm and normalize numerically, which avoids the
+        overflow in :math:`C_1 \\propto e^{\\alpha}` for long chains. The grid
+        runs from 0 to the smaller of :math:`L_c` and
+        :math:`\\max(21\\sqrt{N}, 4\\sqrt{2 L_p L_c})`.
 
         """
 
         # define persistence length and contour length
         Lp = self.lp
         Lc = self.nres*self.b
-        
 
-        # use same pdist as was used for the parent AFRC model 
-        prefactor = np.min((np.max([4,Lp]),10))*0.5
+        # use the same r-grid as the parent AFRC model, but make sure it always
+        # reaches four times the ideal-chain size sqrt(2*Lp*Lc) - the previous grid
+        # depended on Lp but not on aa_size, and cut into the tail for stiff chains
+        # or large segment sizes. Nothing lies beyond the contour length, so the grid
+        # never needs to go past it
+        upper = min(max(3*(7*np.power(self.nres, 0.5)), 4*np.sqrt(2*Lp*Lc)), Lc)
+        p_dist = np.arange(0, upper, self.p_of_r_resolution)
 
-        p_dist = np.arange(0, prefactor*(7*np.power(self.nres,0.5)), self.p_of_r_resolution)
+        # evaluate log P(r) (up to a constant) across the grid:
+        #
+        #   log P = 2 log r - (9/2) log(1 - x^2) - alpha/(1 - x^2),   x = r/Lc
+        #
+        # where alpha = 3*Lc/(4*Lp). Working in log space matters for long chains:
+        # the linear-space form multiplies C1 ~ exp(alpha) by exp(-alpha/(1 - x^2)),
+        # which overflows and underflows respectively once alpha passes ~709 and
+        # previously returned an all-NaN distribution. At r = 0 the log is -inf,
+        # which correctly gives P(0) = 0
+        x2 = np.power(p_dist/Lc, 2)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            log_p = 2*np.log(p_dist) - 4.5*np.log(1 - x2) - self.alpha/(1 - x2)
 
-        # precompute the prefactor
-        PREFACT = np.pi*self.C1*4
+        # the grid stops short of Lc, but guard against a floating-point grid point
+        # landing on (or past) it - the chain can never be longer than its contour
+        # length, so such points carry zero probability
+        log_p[x2 >= 1] = -np.inf
 
-        # compute P(r) across the whole grid at once. Beyond the contour length
-        # (1 - (r/Lc)^2) is negative and the expression is undefined (nan) - the
-        # chain cannot be longer than its contour length, so those points carry zero
-        # probability; the errstate silences the associated warnings
-        r2 = np.power(p_dist,2)
-        RoL2 = np.power(p_dist/Lc,2)
-        with np.errstate(divide='ignore', invalid='ignore', over='ignore'):
-            LHS = (PREFACT*r2) / (Lc*np.power((1-RoL2),9/2))
-            RHS = (-3*Lc) / (4*Lp*(1-RoL2))
-            p_val_raw = LHS*np.exp(RHS)
-
-        p_val_raw = np.nan_to_num(p_val_raw, nan=0.0, posinf=0.0, neginf=0.0)
-        p_val_raw[p_dist >= Lc] = 0.0
+        # shift by the maximum before exponentiating so the largest value is 1
+        p_val_raw = np.exp(log_p - np.max(log_p))
 
         # finally normalize so sums to 1.0 and assign to the object
         self.__p_of_Re_P = p_val_raw/np.sum(p_val_raw)
@@ -218,36 +240,44 @@ class WormLikeChain2:
 
 
     # .....................................................................................
-    #        
+    #
     def get_mean_radius_of_gyration(self):
         """
-        Returns the mean radius of gyration (:math:`R_g`) as defined by
-        O'Brien et al in [1]. NOTE it doesn't explicitly say it in the
-        paper, but we're assuming this is actually Rg^{2} so this returns
-        the square root of the Rg defined in table 1 (WLC row).
+        Return the root-mean-square radius of gyration,
+        :math:`\\sqrt{\\langle R_g^2 \\rangle}`.
 
-        With :math:`C_2 = 1/(2L_p)` the expression used is
+        O'Brien et al. give :math:`\\langle R_g^2 \\rangle` in closed form (they
+        do not say so explicitly, but the expression is a mean-square). With
+        :math:`C_2 = 1/(2L_p)`,
 
-            <Rg^2> = Lc/(6 C2) - 1/(4 C2^2) + 1/(4 C2^3 Lc)
-                     - (1 - exp(-Lc/Lp)) / (8 C2^4 Lc^2)
+        .. math::
 
-        which is the standard Benoit-Doty worm-like chain result
-        :math:`\\langle R_g^2 \\rangle = L_c L_p/3 - L_p^2 + 2L_p^3/L_c - 2L_p^4/L_c^2 (1 - e^{-L_c/L_p})`
-        rewritten in terms of :math:`C_2`. In the rigid-rod limit
-        (:math:`L_c \\ll L_p`) it correctly reduces to :math:`L_c^2/12`.
+           \\langle R_g^2 \\rangle = \\frac{L_c}{6 C_2} - \\frac{1}{4 C_2^2}
+                + \\frac{1}{4 C_2^3 L_c} - \\frac{1 - e^{-L_c/L_p}}{8 C_2^4 L_c^2}
 
-        [1] O’Brien, E. P., Morrison, G., Brooks, B. R., & Thirumalai, D. (2009).
+        which is the Benoit-Doty worm-like chain result
+        :math:`L_c L_p/3 - L_p^2 + 2L_p^3/L_c - 2L_p^4/L_c^2 (1 - e^{-L_c/L_p})`.
+        It reduces to :math:`L_c L_p/3` for a flexible chain and to the rigid-rod
+        value :math:`L_c^2/12` when :math:`L_c \\ll L_p`.
+
+        Note that despite the method name this is the *root-mean-square* radius
+        of gyration, not :math:`\\langle R_g \\rangle`. The name is kept for
+        consistency with the other models.
+
+        Returns
+        -------
+        float
+            The root-mean-square radius of gyration (in Angstroms).
+
+        References
+        ----------
+        [1] O'Brien, E. P., Morrison, G., Brooks, B. R., & Thirumalai, D. (2009).
         How accurate are polymer models in the analysis of Forster resonance
         energy transfer experiments on proteins? The Journal of Chemical Physics,
         130(12), 124903.
 
         [2] Benoit, H., & Doty, P. (1953). Light scattering from non-Gaussian
         chains. The Journal of Physical Chemistry, 57(9), 958-963.
-
-        Returns
-        -------
-        float
-           Value equal to the mean radius of gyration.
 
         """
 

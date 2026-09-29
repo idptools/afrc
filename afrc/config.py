@@ -1,5 +1,25 @@
-# amino acid residues 
-AA_list = ['A','C','D','E','F','G','H','I','K','L','M','N','P','Q','R','S','T','V','W','Y']
+"""
+config.py
+
+Calibrated per-residue constants for the Analytical Flory Random Coil.
+
+Each table maps a one-letter amino acid code to a prefactor fit against
+homopolymer Flory Random Coil simulations. A sequence's prefactor is the
+composition-weighted average of these values (see ``PolymerObject``).
+
+* ``RIJ_RMS_R0`` - root-mean-square distance prefactor, :math:`\\sqrt{\\langle r^2 \\rangle} = R_0^{rms} N^{0.5}`
+* ``RIJ_R0`` - mean distance prefactor, :math:`\\langle r \\rangle = R_0 N^{0.5}`
+* ``RG_X0`` - the :math:`X_0` prefactor in the Lhuillier :math:`P(R_g)` expression
+* ``RG_R0`` - mean radius of gyration prefactor, :math:`\\langle R_g \\rangle = R_0^{g} N^{0.5}`
+
+All lengths are in Angstroms.
+
+Copyright Alex Holehouse 2018-2026 (holehouselab.com).
+
+"""
+
+# amino acid residues
+AA_list =['A','C','D','E','F','G','H','I','K','L','M','N','P','Q','R','S','T','V','W','Y']
 
 # R0 parameters for RMS distances as calibrated against FRC simulations
 RIJ_RMS_R0 = {'A': 6.5463, 

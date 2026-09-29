@@ -1,16 +1,9 @@
 Polymer Models (Theory)
 =========================================================
 
-Alongside the headline Analytical Flory Random Coil, the ``afrc`` package implements
-several additional analytical polymer models. Each one takes an amino acid sequence and
-returns an end-to-end distance distribution together with associated mean values, exposing
-a common interface (``get_end_to_end_distribution``, ``get_mean_end_to_end_distance``, ...).
+Alongside the Analytical Flory Random Coil, the ``afrc`` package implements several other analytical polymer models. Each takes an amino acid sequence and returns an end-to-end distance distribution plus mean values through a common interface (``get_end_to_end_distribution``, ``get_mean_end_to_end_distance``, ...).
 
-The pages below describe, for each model: (1) the mathematical formalism that is actually
-implemented, (2) the free parameters, what they mean physically, and sensible values for a
-polypeptide, and (3) the primary references. For runnable usage examples and the full code
-reference for each class, see :doc:`Polymer Models (Application)
-<../polymer_models_application/index>`.
+For each model, the pages below give (1) the formalism that is actually implemented, (2) the free parameters, what they mean and sensible values for a polypeptide, and (3) the primary references. For usage examples and the code reference, see :doc:`Polymer Models (Application) <../polymer_models_application/index>`.
 
 .. list-table::
    :header-rows: 1
@@ -30,10 +23,10 @@ reference for each class, see :doc:`Polymer Models (Application)
      - Ideal chain with a tunable characteristic ratio (stiffness).
    * - :doc:`Worm-like chain (Zhou) <worm_like_chain_zhou>`
      - ``WormLikeChain``
-     - Semiflexible chain parameterised by a persistence length.
+     - Semiflexible chain parameterized by a persistence length.
    * - :doc:`Worm-like chain (O'Brien) <worm_like_chain_obrien>`
      - ``WormLikeChain2``
-     - Semiflexible chain; better large-chain stability, also gives Rg.
+     - Semiflexible chain; exact finite extensibility, also gives Rg.
    * - :doc:`Self-avoiding walk <self_avoiding_walk>`
      - ``SAW``
      - Good-solvent (excluded-volume) chain at fixed scaling exponent.
@@ -56,9 +49,8 @@ reference for each class, see :doc:`Polymer Models (Application)
 A note on conventions
 ---------------------------------------------------------
 
-Throughout, :math:`N` is the number of residues in the sequence, :math:`r` is the
-end-to-end distance, :math:`R_e` the mean end-to-end distance, and :math:`R_g` the radius
-of gyration. All distances are in Angstroms. Distributions are returned as discrete,
-normalised probability mass functions ``(distances, probabilities)`` evaluated on a grid
-whose spacing is set by ``p_of_r_resolution`` (0.05 Å by default); this is a numerical
-discretisation parameter, not a model parameter.
+Throughout, :math:`N` is the number of residues, :math:`r` is the end-to-end distance, :math:`R_e` the end-to-end distance and :math:`R_g` the radius of gyration. All distances are in Angstroms.
+
+Distributions are returned as discrete, normalized probability mass functions ``(distances, probabilities)`` on a grid whose spacing is set by ``p_of_r_resolution`` (0.05 Å by default). This is a numerical discretization, not a model parameter.
+
+``get_mean_end_to_end_distance`` always returns the mean, :math:`\langle R_e \rangle`, and ``get_root_mean_squared_end_to_end_distance`` returns :math:`\sqrt{\langle R_e^2 \rangle}`. For the AFRC, ``get_mean_radius_of_gyration`` returns the true mean :math:`\langle R_g \rangle`. The other models have no :math:`R_g` distribution, so their ``get_mean_radius_of_gyration`` returns the root-mean-square value :math:`\sqrt{\langle R_g^2 \rangle}` from a closed-form ratio; for an ideal chain this is about 3% larger than :math:`\langle R_g \rangle`.

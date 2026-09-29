@@ -1,26 +1,35 @@
+"""
+fjc.py
+
+Freely jointed chain (FJC) model using the non-Gaussian Kuhn-Grün distribution.
+
+Copyright Alex Holehouse 2018-2026 (holehouselab.com).
+
+"""
 import numpy as np
 from afrc.config import P_OF_R_RESOLUTION
 from numpy.random import choice
 
 class FJCException(Exception):
+    """Exception raised by the freely jointed chain model."""
     pass
 
 class FreelyJointedChain:
     """
-    This class generates an object that returns polymer statistics consistent with a
-    freely jointed chain (FJC) of ``N`` rigid segments each of length ``b``.
+    Freely jointed chain of ``N`` rigid segments of length ``b``.
 
-    Unlike the (Gaussian) Analytical Flory Random Coil, the end-to-end distance
-    distribution used here is the non-Gaussian Kuhn-Grün distribution [1], which
-    is exact in the long-chain limit and - crucially - respects the finite
-    extensibility of the chain (the end-to-end distance can never exceed the
-    contour length :math:`L = Nb`). At small fractional extensions it reduces
-    smoothly to the Gaussian result, so for typical IDP-length chains the bulk of
-    the distribution is close to the AFRC, with deviations appearing in the tail.
+    Unlike the (Gaussian) AFRC, the end-to-end distribution here is the
+    non-Gaussian Kuhn-Grün distribution [1], which respects the finite
+    extensibility of the chain - the end-to-end distance can never exceed the
+    contour length :math:`L = Nb`. At small extensions it reduces to the Gaussian
+    result, so for typical IDR lengths the bulk of the distribution is close to
+    the AFRC and the differences appear in the tail.
 
-    This is a composition-independent model: the sequence is used only to set the
-    number of segments. It is included as an additional reference model.
+    This is a composition-independent reference model: the sequence is only used
+    to set the number of segments.
 
+    References
+    ----------
     [1] Kuhn, W., & Grün, F. (1942). Beziehungen zwischen elastischen Konstanten
     und Dehnungsdoppelbrechung hochelastischer Stoffe. Kolloid-Zeitschrift,
     101(3), 248-271.
@@ -34,25 +43,26 @@ class FreelyJointedChain:
     #
     def __init__(self, seq, p_of_r_resolution=P_OF_R_RESOLUTION, b=3.8):
         """
-        Method to create a FreelyJointedChain object. Seq should be a valid upper-case
-        amino acid sequence and p_of_r_resolution defines the resolution (in angstroms)
-        to be used for distributions.
-
-        By default p_of_r_resolution is taken from the config.py file in the afrc package
-        which defines the resolution at 0.05 A.
+        Create a FreelyJointedChain object.
 
         Parameters
-        -----------
+        ----------
         seq : str
-            Amino acid sequence (used only to calculate the number of segments).
+            Amino acid sequence. Only its length (the number of segments) is
+            used, and it is not validated.
 
         p_of_r_resolution : float
-            Bin width for building probability distributions. In Angstroms.
+            Grid spacing (in Angstroms) used for the distribution. Default is
+            0.05 A.
 
         b : float
-            Segment (Kuhn) length, in Angstroms. This is the FJC analogue of the
-            ``aa_size`` parameter used by the worm-like chain models. The default of
-            3.8 A corresponds to the Cα-Cα distance.
+            Segment (Kuhn) length, in Angstroms. The default of 3.8 A is the Cα-Cα
+            distance, i.e. one segment per residue. Must be > 0.
+
+        Raises
+        ------
+        FJCException
+            If ``b`` is not positive.
 
         """
 
@@ -84,19 +94,16 @@ class FreelyJointedChain:
     #
     def get_end_to_end_distribution(self):
         """
-        Defines the end-to-end distribution based on the freely jointed chain (FJC)
-        using the non-Gaussian Kuhn-Grün distribution.
+        Return the end-to-end distance distribution.
 
-        This is a composition independent model for which the end-to-end distance
-        depends solely on the number of amino acids. It is included here as an
-        additional reference model.
+        The distribution is computed on first use and then cached.
 
         Returns
         -------
-
-        tuple of arrays
-           A 2-pair tuple of numpy arrays where the first is the distance (in Angstroms) and
-           the second array is the probability of that distance.
+        tuple of np.ndarray
+            ``(distances, probabilities)``, where distances are in Angstroms and
+            the probabilities are a normalized probability mass function (they
+            sum to 1). The grid never extends past the contour length.
 
         """
         if self.__p_of_Re_R is False:
@@ -109,17 +116,15 @@ class FreelyJointedChain:
     #
     def get_mean_end_to_end_distance(self):
         """
-        Returns the mean end-to-end distance (:math:`R_e`) for the freely jointed
-        chain.
+        Return the mean end-to-end distance, :math:`\\langle R_e \\rangle`.
 
-        The mean is computed by integrating over the :math:`P(r)` vs. :math:`r`
-        distribution (i.e. :math:`\\sum r \\cdot P(r)`), consistent with the
-        convention used by the other models in this package.
+        This is the expectation over the end-to-end distribution,
+        :math:`\\sum r P(r)`.
 
         Returns
         -------
         float
-           Value equal to the mean end-to-end distance.
+            The mean end-to-end distance (in Angstroms).
 
         """
         [a, b] = self.get_end_to_end_distribution()
@@ -131,17 +136,17 @@ class FreelyJointedChain:
     #
     def get_root_mean_squared_end_to_end_distance(self):
         """
-        Returns the root-mean-square end-to-end distance
-        (:math:`\\sqrt{\\langle R_e^2 \\rangle}`) for the freely jointed chain.
+        Return the root-mean-square end-to-end distance,
+        :math:`\\sqrt{\\langle R_e^2 \\rangle}`.
 
-        The value is computed by taking the square root after integrating over
-        :math:`P(r)` vs. :math:`r^2`. In the long-chain (Gaussian) limit this
-        approaches the ideal-chain result :math:`b\\sqrt{N}`.
+        This is the square root of :math:`\\sum r^2 P(r)` over the end-to-end
+        distribution. For long chains it approaches the ideal-chain value
+        :math:`b\\sqrt{N}` from below.
 
         Returns
         -------
         float
-           Value equal to the root-mean-square end-to-end distance.
+            The root-mean-square end-to-end distance (in Angstroms).
 
         """
         [a, b] = self.get_end_to_end_distribution()
@@ -153,17 +158,19 @@ class FreelyJointedChain:
     #
     def get_mean_radius_of_gyration(self):
         """
-        Returns the mean radius of gyration (:math:`R_g`) for the freely jointed
-        chain.
+        Return the root-mean-square radius of gyration,
+        :math:`\\sqrt{\\langle R_g^2 \\rangle}`.
 
-        For an ideal chain the radius of gyration is related to the root-mean-square
-        end-to-end distance by :math:`R_g = \\sqrt{\\langle R_e^2 \\rangle / 6}`, and
-        this relationship is used here.
+        This uses the ideal-chain relation
+        :math:`\\langle R_g^2 \\rangle = \\langle R_e^2 \\rangle / 6`. Note that
+        despite the method name this is the *root-mean-square* radius of
+        gyration, not :math:`\\langle R_g \\rangle`. The name is kept for
+        consistency with the other models.
 
         Returns
         -------
         float
-           Value equal to the mean radius of gyration.
+            The root-mean-square radius of gyration (in Angstroms).
 
         """
         return self.get_root_mean_squared_end_to_end_distance() / np.sqrt(6)
@@ -173,19 +180,21 @@ class FreelyJointedChain:
     #
     def sample_end_to_end_distribution(self, n=1000):
         """
-        Subsamples from the end-to-end distance distribution to generate an uncorrelated
-        'trajectory' of points. Useful for creating a size-matched sample to compare with
-        simulation data.
+        Draw random end-to-end distances from the distribution.
+
+        Useful for building a size-matched sample to compare against simulation
+        data.
 
         Parameters
         ----------
         n : int
-           Number of random values to sample (default = 1000)
+            Number of values to draw. Default is 1000.
 
         Returns
         -------
         np.ndarray
-           Returns an n-length array with n independent values (floats)
+            ``n`` independent end-to-end distances (in Angstroms). For a
+            zero-length chain every value is 0.
 
         """
         if self.zero_length:
@@ -201,17 +210,18 @@ class FreelyJointedChain:
     #
     def __compute_end_to_end_distribution(self):
         """
-        Defines the end-to-end distribution based on the freely jointed chain (FJC).
-        This is where we actually perform the polymer model calculation.
+        Build and cache the Kuhn-Grün end-to-end distribution.
 
-        The radial probability density is
+        .. math::
 
-            P(r) ∝ 4π r^2 exp( -N [ x β + ln(β / sinh β) ] )
+           P(r) \\propto 4\\pi r^2 \\exp\\left[ -N \\left( x\\beta +
+                  \\ln\\frac{\\beta}{\\sinh\\beta} \\right) \\right],
+           \\qquad x = \\frac{r}{Nb}
 
-        where x = r / (Nb) is the fractional extension and β = L^{-1}(x) is the
-        inverse Langevin function, evaluated here using the Cohen Padé approximant
-        β ≈ x(3 - x^2)/(1 - x^2). The distribution is only defined for r < Nb (the
-        contour length), beyond which the probability is zero.
+        where :math:`\\beta = \\mathcal{L}^{-1}(x)` is the inverse Langevin
+        function, evaluated with the Cohen Padé approximant
+        :math:`\\beta \\approx x(3 - x^2)/(1 - x^2)`. The distribution is only
+        defined for :math:`r < Nb`, so the grid stops short of the contour length.
 
         """
 
@@ -224,9 +234,12 @@ class FreelyJointedChain:
         # contour length
         L = self.nres * self.b
 
-        # use the same style of r-grid as the other models, but never exceed the
-        # contour length (the FJC distribution is undefined for r >= L)
-        r_upper = min(3*(7*np.power(self.nres, 0.5)), L)
+        # use the same style of r-grid as the other models, but make sure it always
+        # reaches four times the ideal-chain size b*sqrt(N) - the fixed 21*sqrt(N)
+        # grid is fine for b = 3.8 A but cut into the tail for larger segment lengths
+        # (by b = 20 A it truncated the RMS by over 25%). Never exceed the contour
+        # length, where the FJC distribution is undefined
+        r_upper = min(max(3*(7*np.power(self.nres, 0.5)), 4*self.b*np.power(self.nres, 0.5)), L)
         p_dist = np.arange(0, r_upper, self.p_of_r_resolution)
 
         # fractional extension (strictly < 1 because arange excludes the endpoint)

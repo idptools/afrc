@@ -31,7 +31,7 @@ which diverges as :math:`x \to 1`, correctly suppressing all probability beyond 
 length. At small extension the exponent reduces to :math:`\tfrac{3}{2} N x^2`, recovering the
 Gaussian chain with :math:`\langle R_e^2 \rangle = N b^2`; the root-mean-square size therefore
 approaches :math:`b\sqrt{N}` from below. The radius of gyration uses the ideal-chain relation
-:math:`R_g = \sqrt{\langle R_e^2 \rangle}/\sqrt{6}`.
+:math:`\sqrt{\langle R_g^2 \rangle} = \sqrt{\langle R_e^2 \rangle}/\sqrt{6}`.
 
 Parameters
 ---------------------------------------------------------

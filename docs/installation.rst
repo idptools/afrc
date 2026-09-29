@@ -1,22 +1,19 @@
 Installation
 =========================================================
 
-Installation from PyPI
+afrc requires Python 3.10 or later and depends only on NumPy and SciPy.
+
+From PyPI
 ----------------------------
 
-afrc is distributed via the Python packaging index (PyPI). As such, the current public release candidate can be installed using::
+Install the latest release with::
 
    pip install afrc
-   
-   
-Installation from GitHub
+
+
+From GitHub
 ----------------------------
-To install the latest development version from GitHub run::
 
-	pip install git+ssh://git@github.com/idptools/afrc.git
-   
+Install the latest development version with::
 
-
-
-
-
+   pip install git+https://github.com/idptools/afrc.git

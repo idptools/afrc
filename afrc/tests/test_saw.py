@@ -91,3 +91,37 @@ def test_long_chain_grid_covers_the_distribution():
 
 def test_exception_is_real_exception():
     assert issubclass(saw.SAWException, Exception)
+
+
+def test_zero_length_chain_is_degenerate():
+    model = saw.SAW('')
+    dist, prob = model.get_end_to_end_distribution()
+    assert dist == pytest.approx([0.0])
+    assert prob == pytest.approx([1.0])
+
+
+@pytest.mark.parametrize('prefactor', [0, -1.0])
+def test_rejects_non_positive_prefactor(all_aa, prefactor):
+    """Regression: a non-positive prefactor silently returned NaN."""
+    model = saw.SAW(all_aa)
+    with pytest.raises(saw.SAWException):
+        model.get_mean_end_to_end_distance(prefactor=prefactor)
+    with pytest.raises(saw.SAWException):
+        model.get_mean_radius_of_gyration(prefactor=prefactor)
+
+
+def test_normalization_constants_are_a_matched_set():
+    """
+    a and b normalize P(x) = a x^(2+theta) exp(-b x^delta) and give it <x^2> = 1,
+    which is what makes prefactor * N^nu the RMS end-to-end distance.
+    """
+    from scipy.special import gamma
+
+    model = saw.SAW('A')
+    a, b, theta, delta = model.a, model.b, model.theta, model.delta
+
+    def moment(k):
+        return a * gamma((3 + theta + k)/delta) / (delta * b**((3 + theta + k)/delta))
+
+    assert moment(0) == pytest.approx(1.0, abs=1e-6)
+    assert moment(2) == pytest.approx(1.0, abs=1e-6)

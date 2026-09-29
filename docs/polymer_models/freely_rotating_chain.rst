@@ -1,12 +1,13 @@
 Freely rotating chain
 =========================================================
 
-The freely rotating chain (nb: sometimes referred to as FRC, although here we avoid that), exposed through
+The freely rotating chain, exposed through
 :class:`~afrc.polymer_models.frc.FreelyRotatingChain`, models the chain as :math:`N` bonds of
 length :math:`b` joined at a fixed bond angle but with unrestricted (free) torsion angles. It
 is an ideal chain - Gaussian end-to-end statistics with scaling exponent :math:`\nu = 0.5` -
 whose absolute size is set by a single stiffness parameter, the characteristic ratio
-:math:`C_\infty`.
+:math:`C_\infty`. (The module is called ``frc``, but note this is not the Flory Random Coil
+that the AFRC is built on.)
 
 Mathematical formalism
 ---------------------------------------------------------
@@ -31,7 +32,7 @@ distribution is then the standard Gaussian chain form
           \exp\!\left( -\frac{3 r^2}{2 \langle R^2 \rangle} \right),
 
 and the radius of gyration uses the ideal-chain relation
-:math:`R_g = \sqrt{\langle R^2 \rangle}/\sqrt{6}`.
+:math:`\sqrt{\langle R_g^2 \rangle} = \sqrt{\langle R^2 \rangle}/\sqrt{6}`.
 
 Parameters
 ---------------------------------------------------------
@@ -60,8 +61,8 @@ Parameters
    ratio of a real polypeptide (:math:`C_\infty \approx 9`); that value arises from hindered
    rotation between backbone dihedrals. The :doc:`Analytical Flory Random Coil <afrc>`
    captures those local restrictions directly, so for a sequence-specific theta-state
-   reference use the AFRC. The FRC is best thought of as a tunable, composition-independent
-   ideal-chain reference.
+   reference use the AFRC. The freely rotating chain is best thought of as a tunable,
+   composition-independent ideal-chain reference.
 
 **What to expect for a protein.** With one virtual bond per residue
 (:math:`b = 3.8` Å), :math:`R_e \approx \sqrt{C_\infty}\, b\sqrt{N}` and

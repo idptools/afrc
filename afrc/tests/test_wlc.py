@@ -86,3 +86,18 @@ def test_chain_shorter_than_persistence_length_raises():
     model = wlc.WormLikeChain('AA', lp=10.0)
     with pytest.raises(wlc.WLCException):
         model.get_end_to_end_distribution()
+
+
+def test_zero_length_chain_is_degenerate():
+    model = wlc.WormLikeChain('')
+    dist, prob = model.get_end_to_end_distribution()
+    assert dist == pytest.approx([0.0])
+    assert prob == pytest.approx([1.0])
+    assert model.get_mean_end_to_end_distance() == 0.0
+    assert model.get_root_mean_squared_end_to_end_distance() == 0.0
+
+
+def test_distribution_is_cached(all_aa):
+    model = wlc.WormLikeChain(all_aa)
+    first = model.get_end_to_end_distribution()
+    assert model.get_end_to_end_distribution()[1] is first[1]

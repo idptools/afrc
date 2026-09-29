@@ -1,58 +1,70 @@
+"""
+wlc.py
+
+Worm-like chain (WLC) model using the closed-form approximation of Zhou (2004).
+
+Copyright Alex Holehouse 2018-2026 (holehouselab.com).
+
+"""
 import numpy as np
 from afrc.config import P_OF_R_RESOLUTION
 
 class WLCException(Exception):
+    """Exception raised by the Zhou worm-like chain model."""
     pass
 
 class WormLikeChain:
     """
-    This class generates an object that returns polymer statistics consistent with the Worm-like chain
-    model as implemented by Zhou (2004).
+    Worm-like chain model, as implemented by Zhou (2004).
 
-    This model should be basically identical to the O'Brien model (WormLikeChain2) but show better
-    numerical stability at large contour lengths. Unlike the O'Brien model this model does not
-    provide an estimation of the mean Rg.
+    This is a composition-independent reference model: the sequence is only used
+    to set the number of residues, and hence the contour length
+    :math:`L_c = N b`. It should agree closely with the O'Brien model
+    (``WormLikeChain2``), but unlike that model it does not provide a radius of
+    gyration.
 
-    Note that the underlying expression is a series expansion in :math:`L_p/L_c` and
-    :math:`r/L_c`, so it is only accurate when the contour length comfortably exceeds the
-    persistence length (for the default parameters this means chains of more than ~10-20
-    residues). Probability is never assigned beyond the contour length, and a chain too
-    short for the expansion to have any valid region raises a WLCException when the
-    distribution is requested.
+    The underlying expression is a series expansion in :math:`L_p/L_c` and
+    :math:`r/L_c`, so it is only accurate when the contour length comfortably
+    exceeds the persistence length (for the default parameters, chains of more
+    than ~10-20 residues). No probability is assigned beyond the contour length,
+    and a chain too short for the expansion to have any valid region raises a
+    ``WLCException`` when the distribution is requested.
 
-    Zhou, H.-X. (2004). Polymer models of protein stability, folding, and interactions. 
-    Biochemistry, 43(8), 2141–2154.
+    References
+    ----------
+    [1] Zhou, H.-X. (2004). Polymer models of protein stability, folding, and
+    interactions. Biochemistry, 43(8), 2141-2154.
 
     """
 
     # .....................................................................................
-    #        
+    #
     def __init__(self, seq, p_of_r_resolution=P_OF_R_RESOLUTION, lp=3.0, aa_size=3.8):
         """
-        Method to create a WormLikeChain Object. Seq should be a valid upper-case amino acid 
-        sequence and p_of_r_resolution defines the resolution (in angstroms) to be used for 
-        distributions.
-        
-        By default p_of_r_resolution is taken from the config.py file in the afrc package 
-        which defines the resolution at 0.05 A.
-        
+        Create a WormLikeChain object.
 
         Parameters
-        -----------
+        ----------
         seq : str
-            Amino acid sequence (used only to calculate number of residues)
+            Amino acid sequence. Only its length is used, and it is not
+            validated.
 
         p_of_r_resolution : float
-            Bin width for bulding probability distributions. In Angstroms.
+            Grid spacing (in Angstroms) used for the distribution. Default is
+            0.05 A.
 
         lp : float
-            Persistence length. We use a default of 3 but 4 is also used a lot in the 
-            literature.
+            Persistence length, in Angstroms. We use a default of 3.0 A, although
+            4 A is also common in the literature. Must be > 0.
 
         aa_size : float
-            Size of one amino acid (called 'b' in the literature). 3.8 is the generally
-            acceptable value used.
-            
+            Contour length per residue (called :math:`b` in the literature), in
+            Angstroms. The default of 3.8 A is the Cα-Cα distance. Must be > 0.
+
+        Raises
+        ------
+        WLCException
+            If ``lp`` or ``aa_size`` is not positive.
 
         """
 
@@ -71,7 +83,7 @@ class WormLikeChain:
 
         if self.b <= 0:
             raise WLCException('Error, aa_size cannot be less than or equal to 0')
-        
+
         # p_of_r_resolution defines the P(r) resolution in angstroms - i.e. basically
         # the spacing between r values in a P(r) vs. r plot
         self.p_of_r_resolution = p_of_r_resolution
@@ -89,22 +101,25 @@ class WormLikeChain:
 
 
     # .....................................................................................
-    #        
+    #
     def get_end_to_end_distribution(self):
-
         """
-        Defines the end-to-end distribution based on the Worm-like chain (WLC).
+        Return the end-to-end distance distribution.
 
-        This is a composition independent model for which the end-to-end distance depends
-        solely on the number of amino acids. It is included here as an additional reference 
-        model.
+        The distribution is computed on first use and then cached.
 
         Returns
         -------
+        tuple of np.ndarray
+            ``(distances, probabilities)``, where distances are in Angstroms and
+            the probabilities are a normalized probability mass function (they
+            sum to 1).
 
-        tuple of arrays
-           A 2-pair tuple of numpy arrays where the first is the distance (in Angstroms) and 
-           the second array is the probability of that distance.
+        Raises
+        ------
+        WLCException
+            If the contour length is too short relative to the persistence
+            length for the Zhou expansion to be valid anywhere.
 
         """
 
@@ -115,18 +130,18 @@ class WormLikeChain:
 
 
     # .....................................................................................
-    #        
+    #
     def get_mean_end_to_end_distance(self):
         """
-        Returns the mean end-to-end distance (:math:`R_e`). As calculated from the Worm-like
-        chain (WLC) model as defined by Zhou [Zhou2004]_. 
+        Return the mean end-to-end distance, :math:`\\langle R_e \\rangle`.
 
-        Note mean here is calculated by integrating over P(r) vs r.
-        
+        This is the expectation over the end-to-end distribution,
+        :math:`\\sum r P(r)`.
+
         Returns
         -------
         float
-           Value equal to the mean end-to-end distance
+            The mean end-to-end distance (in Angstroms).
 
         """
         [a,b] = self.get_end_to_end_distribution()
@@ -135,18 +150,19 @@ class WormLikeChain:
 
 
     # .....................................................................................
-    #        
+    #
     def get_root_mean_squared_end_to_end_distance(self):
         """
-        Returns the mean end-to-end distance (:math:`R_e`). As calculated from the Worm-like
-        chain (WLC) model as defined by Zhou [Zhou2004]_. 
+        Return the root-mean-square end-to-end distance,
+        :math:`\\sqrt{\\langle R_e^2 \\rangle}`.
 
-        Note mean here is calculated by taking the square root after integrating over P(r) vs r^2.
-        
+        This is the square root of :math:`\\sum r^2 P(r)` over the end-to-end
+        distribution.
+
         Returns
         -------
         float
-           Value equal to the root-mean-squared end-to-end distance
+            The root-mean-square end-to-end distance (in Angstroms).
 
         """
 
@@ -155,11 +171,25 @@ class WormLikeChain:
         return np.sqrt(np.sum(b*np.power(a,2)))
 
     # .....................................................................................
-    #        
+    #
     def __compute_end_to_end_distribution(self):
         """
-        Defines the end-to-end distribution based on the Worm-like chain (WLC) as defined by
-        Zhou. This is where we actually perform the polymer model calculation.
+        Build and cache the end-to-end distribution (equations 5a/5b of Zhou 2004).
+
+        .. math::
+
+           P(r) = 4\\pi A r^2 \\exp\\left( -\\frac{3 r^2}{4 L_p L_c} \\right) \\zeta(r),
+           \\qquad A = \\left( \\frac{3}{4\\pi L_p L_c} \\right)^{3/2}
+
+        where :math:`\\zeta(r)` is Zhou's polynomial correction series. Points
+        beyond the contour length and negative values of the series are set to
+        zero, and the result is normalized to sum to 1.
+
+        Raises
+        ------
+        WLCException
+            If no part of the distribution survives (the contour length is
+            comparable to or shorter than the persistence length).
 
         """
 
@@ -225,5 +255,3 @@ class WormLikeChain:
         # finally normalize so sums to 1.0 and assign to the object
         self.__p_of_Re_P = p_val_raw/total
         self.__p_of_Re_R = p_dist
-
-

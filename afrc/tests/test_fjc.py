@@ -69,3 +69,41 @@ def test_exception_is_real_exception():
 def test_rejects_non_positive_segment_length(all_aa):
     with pytest.raises(fjc.FJCException):
         fjc.FreelyJointedChain(all_aa, b=0)
+
+
+def test_zero_length_chain_is_degenerate():
+    model = fjc.FreelyJointedChain('')
+    dist, prob = model.get_end_to_end_distribution()
+    assert dist == pytest.approx([0.0])
+    assert prob == pytest.approx([1.0])
+    assert np.all(model.sample_end_to_end_distribution(n=20) == 0.0)
+
+
+@pytest.mark.parametrize('b', [3.8, 10.0, 20.0])
+def test_grid_covers_tail_for_large_segments(b):
+    """
+    Regression: the grid was fixed at 21*sqrt(N), which truncated the tail for
+    segment lengths above ~7 A (the RMS came out over 25% low at b = 20 A).
+    """
+    n = 50
+    model = fjc.FreelyJointedChain('A' * n, b=b)
+    dist, prob = model.get_end_to_end_distribution()
+    assert prob[-1] < 1e-8 * prob.max()
+    rms = model.get_root_mean_squared_end_to_end_distance()
+    # finite extensibility pulls the RMS slightly below the ideal b*sqrt(N)
+    assert rms < b * np.sqrt(n)
+    assert rms == pytest.approx(b * np.sqrt(n), rel=0.02)
+
+
+def test_grid_never_extends_past_contour_length():
+    model = fjc.FreelyJointedChain('A' * 5, b=20.0)
+    dist, _ = model.get_end_to_end_distribution()
+    assert dist[-1] < 5 * 20.0
+
+
+def test_sampling_reuses_the_cached_distribution(all_aa):
+    np.random.seed(2)
+    model = fjc.FreelyJointedChain(all_aa * 3)
+    mean = model.get_mean_end_to_end_distance()
+    samples = model.sample_end_to_end_distribution(n=4000)
+    assert np.mean(samples) == pytest.approx(mean, rel=0.05)

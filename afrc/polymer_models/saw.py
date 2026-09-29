@@ -1,50 +1,62 @@
+"""
+saw.py
+
+Self-avoiding walk (SAW) model at a fixed good-solvent scaling exponent.
+
+Copyright Alex Holehouse 2018-2026 (holehouselab.com).
+
+"""
 import numpy as np
 from afrc.config import P_OF_R_RESOLUTION
 
 class SAWException(Exception):
+    """Exception raised by the self-avoiding walk model."""
     pass
 
 class SAW:
     """
-    This class generates an object that returns polymer statistics consistent with a
-    self-avoiding random walk (SAW). This model was developed by Jhullian 'J' Alston,
-    and is based on the reference implementation by O'Brien et al [1]
+    Self-avoiding walk, using the des Cloizeaux scaling form as implemented by
+    O'Brien et al. [1]. This model was developed by Jhullian 'J' Alston.
 
-    The chain is fixed at the good-solvent scaling exponent, held on the object as
-    ``self.nu = 0.598``. That single value sets both the chain-length dependence of the
-    end-to-end distance (:math:`R_{ee} = \\texttt{prefactor}\\,N^{\\nu}`) and the universal
-    :math:`R_g/R_e` ratio, so the two are guaranteed to describe the same chain. To vary
-    the exponent, use :class:`~afrc.polymer_models.nudep_saw.NuDepSAW` instead.
+    The scaling exponent is fixed at the good-solvent value, held on the object
+    as ``self.nu = 0.598``. That single value sets both the chain-length
+    dependence of the size scale (:math:`R_{ee} = \\texttt{prefactor}\\,N^{\\nu}`)
+    and the universal :math:`R_g/R_e` ratio, so the two always describe the same
+    chain. To vary the exponent, use
+    :class:`~afrc.polymer_models.nudep_saw.NuDepSAW`.
 
-    [1] O’Brien, E. P., Morrison, G., Brooks, B. R., & Thirumalai, D. (2009).
+    This is a composition-independent reference model: the sequence is only used
+    to set the number of residues. The overall size is set by the ``prefactor``
+    argument accepted by every method (default 5.5 A).
+
+    References
+    ----------
+    [1] O'Brien, E. P., Morrison, G., Brooks, B. R., & Thirumalai, D. (2009).
     How accurate are polymer models in the analysis of Forster resonance
     energy transfer experiments on proteins? The Journal of Chemical Physics,
     130(12), 124903.
 
-    [2] Le Guillou, J. C., & Zinn-Justin, J. (1977). Critical Exponents for the n-Vector
-    Model in Three Dimensions from Field Theory. Physical Review Letters, 39(2), 95-98.
+    [2] Le Guillou, J. C., & Zinn-Justin, J. (1977). Critical Exponents for the
+    n-Vector Model in Three Dimensions from Field Theory. Physical Review
+    Letters, 39(2), 95-98.
 
     """
 
     # .....................................................................................
-    #        
+    #
     def __init__(self, seq, p_of_r_resolution=P_OF_R_RESOLUTION):
         """
-        Method to create SAW (self-avoiding walk) object. Seq should be a valid upper-case 
-        amino acid sequence and p_of_r_resolution defines the resolution (in angstroms) to 
-        be used for distributions.
-        
-        By default p_of_r_resolution is taken from the config.py file in the afrc package which 
-        defines the resolution at 0.05 A.
-        
+        Create a SAW object.
+
         Parameters
-        -----------
+        ----------
         seq : str
-            Amino acid sequence (used only to calculate number of residues)
+            Amino acid sequence. Only its length is used, and it is not
+            validated.
 
         p_of_r_resolution : float
-            Bin width for bulding probability distributions. In Angstroms.
-
+            Grid spacing (in Angstroms) used for the distribution. Default is
+            0.05 A.
 
         """
 
@@ -86,30 +98,32 @@ class SAW:
 
 
     # .....................................................................................
-    #        
+    #
     def get_end_to_end_distribution(self, prefactor=5.5):
         """
-        Defines the end-to-end distribution based on the SAW as defined by
-        https://aip.scitation.org/doi/10.1063/1.3082151. 
+        Return the end-to-end distance distribution.
 
-        This is a composition independent model for which the end-to-end distance depends
-        solely on the number of amino acids. It is included here as an additional reference 
-        model.
-
-        By default this uses a prefactor of 5.5 A (0.55 nanometers).
+        Because ``prefactor`` can change between calls, the distribution is
+        recomputed every time rather than cached.
 
         Parameters
-        ------------
+        ----------
         prefactor : float
-            Prefactor is a number that tunes the SAW dimensions. 0.5 is in the right ballpark
-            but this number should be tuned to match EV sims.
+            Size scale in Angstroms, such that the root-mean-square end-to-end
+            distance is ``prefactor * N**0.598``. Default is 5.5 A; this should
+            be tuned to match excluded-volume simulations for quantitative work.
 
         Returns
         -------
+        tuple of np.ndarray
+            ``(distances, probabilities)``, where distances are in Angstroms and
+            the probabilities are a normalized probability mass function (they
+            sum to 1).
 
-        tuple of arrays
-           A 2-pair tuple of numpy arrays where the first is the distance (in Angstroms) and 
-           the second array is the probability of that distance.
+        Raises
+        ------
+        SAWException
+            If ``prefactor`` is not positive.
 
         """
 
@@ -119,28 +133,29 @@ class SAW:
 
 
     # .....................................................................................
-    #        
+    #
     def get_mean_end_to_end_distance(self, prefactor=5.5):
         """
-        Returns the mean end-to-end distance (:math:`R_e`). As calculated
-        from the SAW model as defined
-        https://aip.scitation.org/doi/10.1063/1.3082151.
+        Return the mean end-to-end distance, :math:`\\langle R_e \\rangle`.
 
-        The mean is computed by integrating over the :math:`P(r)` vs. :math:`r`
-        distribution (i.e. :math:`\\sum r \\cdot P(r)`), consistent with the
-        convention used by the other models in this package.
-
-        By default this uses a prefactor of 5.5 A (0.55 nanometers).
+        This is the expectation over the end-to-end distribution,
+        :math:`\\sum r P(r)`.
 
         Parameters
         ----------
         prefactor : float
-            Prefactor that tunes the SAW dimensions. Default is 5.5 A.
+            Size scale in Angstroms (see ``get_end_to_end_distribution``).
+            Default is 5.5 A.
 
         Returns
         -------
         float
-           Value equal to the mean end-to-end distance.
+            The mean end-to-end distance (in Angstroms).
+
+        Raises
+        ------
+        SAWException
+            If ``prefactor`` is not positive.
 
         """
 
@@ -152,21 +167,27 @@ class SAW:
     #
     def get_root_mean_squared_end_to_end_distance(self, prefactor=5.5):
         """
-        Returns the root-mean-square end-to-end distance (:math:`\\sqrt{\\langle R_e^2 \\rangle}`)
-        as calculated from the SAW model.
+        Return the root-mean-square end-to-end distance,
+        :math:`\\sqrt{\\langle R_e^2 \\rangle}`.
 
-        The value is computed by taking the square root after integrating over
-        :math:`P(r)` vs. :math:`r^2`.
+        This is the square root of :math:`\\sum r^2 P(r)` over the end-to-end
+        distribution, and equals ``prefactor * N**0.598``.
 
         Parameters
         ----------
         prefactor : float
-            Prefactor that tunes the SAW dimensions. Default is 5.5 A.
+            Size scale in Angstroms (see ``get_end_to_end_distribution``).
+            Default is 5.5 A.
 
         Returns
         -------
         float
-           Value equal to the root-mean-square end-to-end distance.
+            The root-mean-square end-to-end distance (in Angstroms).
+
+        Raises
+        ------
+        SAWException
+            If ``prefactor`` is not positive.
 
         """
 
@@ -175,33 +196,41 @@ class SAW:
         return np.sqrt(np.sum(np.power(a, 2) * b))
 
     # .....................................................................................
-    #        
+    #
     def get_mean_radius_of_gyration(self, prefactor=5.5):
         """
-        Returns the mean radius of gyration (:math:`R_g`) for the SAW model.
+        Return the root-mean-square radius of gyration,
+        :math:`\\sqrt{\\langle R_g^2 \\rangle}`.
 
-        :math:`R_g` is obtained from the mean-squared end-to-end distance via the
-        analytical ratio
+        This is obtained from the root-mean-square end-to-end distance via the
+        universal ratio
 
         .. math::
 
            \\frac{\\langle R_g^2 \\rangle}{\\langle R_e^2 \\rangle} =
               \\frac{\\gamma(\\gamma + 1)}{2(\\gamma + 2\\nu)(\\gamma + 2\\nu + 1)}
 
-        expressed in terms of the gamma exponent and the scaling exponent
-        :math:`\\nu` (see [1]). Both are taken from the object's ``gamma`` and ``nu``
-        attributes, so the exponent used here is by construction the same one that sets
-        the chain-length dependence of :math:`R_{ee}`.
+        using the object's ``gamma`` and ``nu`` attributes, so the exponent here
+        is by construction the one that sets the size scale. Note that despite
+        the method name this is the *root-mean-square* radius of gyration, not
+        :math:`\\langle R_g \\rangle`. The name is kept for consistency with the
+        other models.
 
         Parameters
         ----------
         prefactor : float
-            Prefactor that tunes the SAW dimensions. Default is 5.5 A.
+            Size scale in Angstroms (see ``get_end_to_end_distribution``).
+            Default is 5.5 A.
 
         Returns
         -------
         float
-           Value equal to the mean radius of gyration.
+            The root-mean-square radius of gyration (in Angstroms).
+
+        Raises
+        ------
+        SAWException
+            If ``prefactor`` is not positive.
 
         """
         gamma = self.gamma
@@ -216,17 +245,40 @@ class SAW:
         return np.sqrt(Ree**2*(top/bottom))
 
 
-    
+
     # .....................................................................................
-    #        
+    #
     def __compute_end_to_end_distribution(self, prefactor):
         """
-        Defines the end-to-end distribution based on the SAW as defined by
-        https://aip.scitation.org/doi/10.1063/1.3082151
-        . This is where we actually perform the polymer model calculation.
+        Build the end-to-end distribution for a given prefactor.
 
+        .. math::
+
+           P(r) = \\frac{a}{R_{ee}} \\left( \\frac{r}{R_{ee}} \\right)^{2+\\theta}
+                  \\exp\\left[ -b \\left( \\frac{r}{R_{ee}} \\right)^{\\delta} \\right],
+           \\qquad R_{ee} = \\texttt{prefactor}\\,N^{\\nu}
+
+        with :math:`\\theta = 0.3`, :math:`\\delta = 2.5`, :math:`a = 3.67853`
+        and :math:`b = 1.23152`. The grid runs from 0 to the larger of
+        :math:`21\\sqrt{N}` and :math:`4R_{ee}`.
+
+        Parameters
+        ----------
+        prefactor : float
+            Size scale in Angstroms.
+
+        Raises
+        ------
+        SAWException
+            If ``prefactor`` is not positive.
 
         """
+
+        # the prefactor is a length scale, so it must be positive - a zero or negative
+        # value previously produced an all-NaN distribution without complaint
+        prefactor = float(prefactor)
+        if prefactor <= 0:
+            raise SAWException('Error, prefactor must be greater than 0 (it sets the size scale in Angstroms)')
 
         # a zero-length chain has all its weight at r = 0
         if self.zero_length:

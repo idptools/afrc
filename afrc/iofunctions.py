@@ -16,30 +16,32 @@ from .exceptions import AFRCException
 #
 def validate_keyword(viable_keywords, input_keyword, keyword_name):
     """
-    General function that protects against poorly defined user input. This ensures
-    that input keywords are case insensitive (which in general we want).
+    Validate a user-supplied keyword against a fixed set of options.
+
+    Keywords are case insensitive, so the input is lower-cased before it is
+    checked.
 
     Parameters
     ----------
-    viable_keywords : list
-         viable_keywords is a list of strings which are the complete set of
-         options that will be considered good. This is provided by the code
-         (i.e. is hard-coded in for a given function).
+    viable_keywords : list of str
+        The complete set of (lower-case) options that are accepted. This is
+        hard-coded by the calling function.
 
     input_keyword : str
-         This defines the input value provided by the user. All keywords are
-         lowercase so this function also automatically casts the keyword to
-         lowercase to ensure keywords are actually case insensitive.
+        The value provided by the user.
 
-    keyword_name : string
-         This is the name of the keyword being defined, and again is
-         hard-coded by the function.
+    keyword_name : str
+        The name of the argument being validated, used in the error message.
 
     Returns
     -------
     str
-        Returns the lower-case cast keyword if valid, else raises an
-        AFRCException.
+        The lower-cased keyword.
+
+    Raises
+    ------
+    AFRCException
+        If ``input_keyword`` is not a string or is not one of ``viable_keywords``.
 
     """
 

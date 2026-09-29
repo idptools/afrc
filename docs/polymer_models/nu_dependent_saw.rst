@@ -78,7 +78,7 @@ Parameters
      - Sets the absolute per-monomer length scale (as for the SAW): it *is* the
        root-mean-square end-to-end distance of a one-residue chain, and
        :math:`\sqrt{\langle R_e^2 \rangle} = \texttt{prefactor}\,N^{\nu}`. Around 5-6 Å is
-       typical.
+       typical. Must be > 0 (a ``NuDepSAWException`` is raised otherwise).
 
 **What to expect for a protein.** At :math:`\nu = 0.5` the model gives theta-state
 (ideal-chain) scaling; increasing :math:`\nu` toward 0.588 swells the chain to good-solvent

@@ -54,7 +54,8 @@ Parameters
        The normalisation constants :math:`a` and :math:`b` are chosen so that
        :math:`R_{ee}` is exactly the root-mean-square end-to-end distance of the
        distribution. Values around 5-6 Å are reasonable, but the prefactor should be tuned
-       to match explicit excluded-volume simulations for quantitative work.
+       to match explicit excluded-volume simulations for quantitative work. Must be > 0
+       (a ``SAWException`` is raised otherwise).
 
 The scaling exponent is fixed at the good-solvent value (:math:`\nu = 0.598`, held on the
 object as ``nu``). To vary :math:`\nu` continuously, use the

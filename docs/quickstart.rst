@@ -1,44 +1,27 @@
-AFRC Quickstart
+Quickstart
 =========================================================
-The code below provides some initial examples of how to use the AFRC. For more examples see the demo directory at https://github.com/idptools/afrc/
 
-Usage
-************************
-
-AFRC gives you a way to obtain a variety of inter-residue distances from an analytical version of the Flory Random Coil. The input required is an amino acid sequence, and from this distribution and mean values are available through what is essentially an API.
-
-As an example
-
+Everything in the AFRC is accessed through an ``AnalyticalFRC`` object, built from an amino acid sequence. More examples are in the `demo directory <https://github.com/idptools/afrc/tree/main/demo>`_.
 
 .. code-block:: python
 
    from afrc import AnalyticalFRC
 
-   # create an AFRC object
-   protein = AnalyticalFRC('MASNDYTQQATQSYGAYPTQPGQGYSQQSSQPYGQQSYSGYSQSTDTSGYGQSSYSSYGQSQNTGYGTQSTPQGYGSTGGYGSSQSSQSSYGQQSSYPGYGQQPAPSSTSGSYGSSSQSSSYGQPQSGSYSQQPSYGGQQQSYGQQQSYNPPQG')
+   protein = AnalyticalFRC('MASNDYTQQATQSYGAYPTQPGQGYSQQSSQPYGQQSYSGYSQSTDTSGYGQSSYSSYGQSQNTGYGTQSTPQGYG')
 
-   # build the internal scaling profile
-   internal_scaling = protein.get_internal_scaling()
-
-   # build the end-to-end distribution. The distribution functions return a
-   # 2-pair tuple (distances, probabilities), so they can be unpacked directly:
-   distances, probabilities = protein.get_end_to_end_distribution()
-
-   # build the rg distribution (also returned as (distances, probabilities))
-   rg_distances, rg_probabilities = protein.get_radius_of_gyration_distribution()
-
-   # compute the average rg
-   mean_rg = protein.get_mean_radius_of_gyration()
-
-   # compute the mean end-to-end distance (Re)
+   # mean dimensions, all in Angstroms
    mean_re = protein.get_mean_end_to_end_distance()
-
-   # compute the mean hydrodynamic radius (Rh)
+   mean_rg = protein.get_mean_radius_of_gyration()
    mean_rh = protein.get_mean_hydrodynamic_radius()
 
-   # build a contact map using a 15 angstrom contact threshold
+   # distributions are returned as (distances, probabilities)
+   re_distances, re_probabilities = protein.get_end_to_end_distribution()
+   rg_distances, rg_probabilities = protein.get_radius_of_gyration_distribution()
+
+   # internal scaling profile: [|i-j|, mean distance] for every separation
+   internal_scaling = protein.get_internal_scaling()
+
+   # contact fractions at a 15 A threshold for every pair of residues
    contact_map = protein.get_contact_map(15.0)
 
-
-
-
+Residue indices start at 0. See :doc:`polymer_models_application/afrc` for the full set of methods.

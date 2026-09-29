@@ -1,35 +1,53 @@
+"""
+frc.py
+
+Freely rotating chain model with a tunable characteristic ratio.
+
+Note that FRC here means freely *rotating* chain, not the Flory Random Coil
+that the AFRC itself is built on.
+
+Copyright Alex Holehouse 2018-2026 (holehouselab.com).
+
+"""
 import numpy as np
 from afrc.config import P_OF_R_RESOLUTION
 from numpy.random import choice
 
 class FRCException(Exception):
+    """Exception raised by the freely rotating chain model."""
     pass
 
 class FreelyRotatingChain:
     """
-    This class generates an object that returns polymer statistics consistent with a
-    freely rotating chain (FRC) of ``N`` bonds of length ``b`` with a fixed bond angle
-    and unrestricted (free) torsion angles.
+    Freely rotating chain of ``N`` bonds of length ``b`` with a fixed bond angle
+    and free torsions.
 
-    The freely rotating chain is an ideal chain: like the Analytical Flory Random Coil it
-    has Gaussian end-to-end statistics with a true scaling exponent of 0.5, but its size is
-    set by a single stiffness parameter - the characteristic ratio :math:`C_\\infty`. The
-    mean-squared end-to-end distance follows the exact finite-N freely-rotating-chain result
+    The freely rotating chain is an ideal chain: like the AFRC it has Gaussian
+    end-to-end statistics with a scaling exponent of 0.5, but its size is set by
+    a single stiffness parameter, the characteristic ratio :math:`C_\\infty`. The
+    mean-squared end-to-end distance is the exact finite-N result
 
-        ⟨R²⟩ = C∞·N·b² − 2 b² α (1 − α^N) / (1 − α)²,      α = (C∞ − 1)/(C∞ + 1),
+    .. math::
 
-    where α is the cosine of the angle between successive bonds. Setting ``c_inf = 1``
-    (α = 0) recovers the freely jointed chain, while ``c_inf = 2`` corresponds to a
-    tetrahedral backbone angle. Note that a freely rotating chain cannot reproduce the much
-    larger characteristic ratio of a real polypeptide (:math:`C_\\infty \\approx 9`), which
-    arises from hindered/restricted rotation - use the Analytical Flory Random Coil for that.
+       \\langle R^2 \\rangle = C_\\infty N b^2 - 2 b^2 \\frac{\\alpha (1 - \\alpha^N)}{(1 - \\alpha)^2},
+       \\qquad \\alpha = \\frac{C_\\infty - 1}{C_\\infty + 1}
 
-    This is a composition-independent model: the sequence is used only to set the number of
-    bonds. It is included as an additional reference model.
+    where :math:`\\alpha` is the cosine of the angle between successive bonds.
+    ``c_inf = 1`` recovers the freely jointed chain, and ``c_inf = 2`` is a
+    tetrahedral backbone. A freely rotating chain cannot reach the much larger
+    characteristic ratio of a real polypeptide (:math:`C_\\infty \\approx 9`),
+    which comes from hindered rotation - use the AFRC for that.
 
-    [1] Flory, P. J. (1969). Statistical Mechanics of Chain Molecules. Wiley-Interscience.
+    This is a composition-independent reference model: the sequence is only used
+    to set the number of bonds.
 
-    [2] Rubinstein, M., & Colby, R. H. (2003). Polymer Physics. Oxford University Press.
+    References
+    ----------
+    [1] Flory, P. J. (1969). Statistical Mechanics of Chain Molecules.
+    Wiley-Interscience.
+
+    [2] Rubinstein, M., & Colby, R. H. (2003). Polymer Physics. Oxford
+    University Press.
 
     """
 
@@ -37,30 +55,32 @@ class FreelyRotatingChain:
     #
     def __init__(self, seq, p_of_r_resolution=P_OF_R_RESOLUTION, b=3.8, c_inf=2.0):
         """
-        Method to create a FreelyRotatingChain object. Seq should be a valid upper-case
-        amino acid sequence and p_of_r_resolution defines the resolution (in angstroms)
-        to be used for distributions.
-
-        By default p_of_r_resolution is taken from the config.py file in the afrc package
-        which defines the resolution at 0.05 A.
+        Create a FreelyRotatingChain object.
 
         Parameters
-        -----------
+        ----------
         seq : str
-            Amino acid sequence (used only to calculate the number of bonds).
+            Amino acid sequence. Only its length (the number of bonds) is used,
+            and it is not validated.
 
         p_of_r_resolution : float
-            Bin width for building probability distributions. In Angstroms.
+            Grid spacing (in Angstroms) used for the distribution. Default is
+            0.05 A.
 
         b : float
-            Bond (segment) length, in Angstroms. The default of 3.8 A corresponds to the
-            Cα-Cα distance, i.e. one virtual bond per residue.
+            Bond length, in Angstroms. The default of 3.8 A is the Cα-Cα
+            distance, i.e. one virtual bond per residue. Must be > 0.
 
         c_inf : float
-            Characteristic ratio :math:`C_\\infty`, a dimensionless measure of chain
-            stiffness defined as :math:`(1 + \\alpha)/(1 - \\alpha)` where α is the cosine
-            of the angle between successive bonds. ``c_inf = 1`` recovers the freely jointed
-            chain; ``c_inf = 2`` corresponds to a tetrahedral bond angle. Must be > 0.
+            Characteristic ratio :math:`C_\\infty = (1 + \\alpha)/(1 - \\alpha)`,
+            where :math:`\\alpha` is the cosine of the angle between successive
+            bonds. ``c_inf = 1`` recovers the freely jointed chain; ``c_inf = 2``
+            (the default) is a tetrahedral bond angle. Must be > 0.
+
+        Raises
+        ------
+        FRCException
+            If ``b`` or ``c_inf`` is not positive.
 
         """
 
@@ -96,19 +116,16 @@ class FreelyRotatingChain:
     #
     def get_end_to_end_distribution(self):
         """
-        Defines the end-to-end distribution based on the freely rotating chain (FRC).
+        Return the end-to-end distance distribution.
 
-        The freely rotating chain is an ideal chain, so the distribution is Gaussian, but
-        its size is set by the characteristic ratio. This is a composition independent
-        model for which the end-to-end distance depends solely on the number of amino acids.
-        It is included here as an additional reference model.
+        The distribution is computed on first use and then cached.
 
         Returns
         -------
-
-        tuple of arrays
-           A 2-pair tuple of numpy arrays where the first is the distance (in Angstroms) and
-           the second array is the probability of that distance.
+        tuple of np.ndarray
+            ``(distances, probabilities)``, where distances are in Angstroms and
+            the probabilities are a normalized probability mass function (they
+            sum to 1).
 
         """
         if self.__p_of_Re_R is False:
@@ -121,16 +138,15 @@ class FreelyRotatingChain:
     #
     def get_mean_end_to_end_distance(self):
         """
-        Returns the mean end-to-end distance (:math:`R_e`) for the freely rotating chain.
+        Return the mean end-to-end distance, :math:`\\langle R_e \\rangle`.
 
-        The mean is computed by integrating over the :math:`P(r)` vs. :math:`r`
-        distribution (i.e. :math:`\\sum r \\cdot P(r)`), consistent with the convention
-        used by the other models in this package.
+        This is the expectation over the end-to-end distribution,
+        :math:`\\sum r P(r)`.
 
         Returns
         -------
         float
-           Value equal to the mean end-to-end distance.
+            The mean end-to-end distance (in Angstroms).
 
         """
         [a, b] = self.get_end_to_end_distribution()
@@ -142,17 +158,17 @@ class FreelyRotatingChain:
     #
     def get_root_mean_squared_end_to_end_distance(self):
         """
-        Returns the root-mean-square end-to-end distance
-        (:math:`\\sqrt{\\langle R_e^2 \\rangle}`) for the freely rotating chain.
+        Return the root-mean-square end-to-end distance,
+        :math:`\\sqrt{\\langle R_e^2 \\rangle}`.
 
-        The value is computed by taking the square root after integrating over
-        :math:`P(r)` vs. :math:`r^2`. In the long-chain limit this approaches
-        :math:`\\sqrt{C_\\infty}\\, b\\sqrt{N}`.
+        This is the square root of :math:`\\sum r^2 P(r)` over the end-to-end
+        distribution. For long chains it approaches
+        :math:`\\sqrt{C_\\infty} b \\sqrt{N}`.
 
         Returns
         -------
         float
-           Value equal to the root-mean-square end-to-end distance.
+            The root-mean-square end-to-end distance (in Angstroms).
 
         """
         [a, b] = self.get_end_to_end_distribution()
@@ -164,16 +180,19 @@ class FreelyRotatingChain:
     #
     def get_mean_radius_of_gyration(self):
         """
-        Returns the mean radius of gyration (:math:`R_g`) for the freely rotating chain.
+        Return the root-mean-square radius of gyration,
+        :math:`\\sqrt{\\langle R_g^2 \\rangle}`.
 
-        For an ideal chain the radius of gyration is related to the root-mean-square
-        end-to-end distance by :math:`R_g = \\sqrt{\\langle R_e^2 \\rangle / 6}`, and this
-        relationship is used here.
+        This uses the ideal-chain relation
+        :math:`\\langle R_g^2 \\rangle = \\langle R_e^2 \\rangle / 6`. Note that
+        despite the method name this is the *root-mean-square* radius of
+        gyration, not :math:`\\langle R_g \\rangle`. The name is kept for
+        consistency with the other models.
 
         Returns
         -------
         float
-           Value equal to the mean radius of gyration.
+            The root-mean-square radius of gyration (in Angstroms).
 
         """
         return self.get_root_mean_squared_end_to_end_distance() / np.sqrt(6)
@@ -183,19 +202,21 @@ class FreelyRotatingChain:
     #
     def sample_end_to_end_distribution(self, n=1000):
         """
-        Subsamples from the end-to-end distance distribution to generate an uncorrelated
-        'trajectory' of points. Useful for creating a size-matched sample to compare with
-        simulation data.
+        Draw random end-to-end distances from the distribution.
+
+        Useful for building a size-matched sample to compare against simulation
+        data.
 
         Parameters
         ----------
         n : int
-           Number of random values to sample (default = 1000)
+            Number of values to draw. Default is 1000.
 
         Returns
         -------
         np.ndarray
-           Returns an n-length array with n independent values (floats)
+            ``n`` independent end-to-end distances (in Angstroms). For a
+            zero-length chain every value is 0.
 
         """
         if self.zero_length:
@@ -211,13 +232,18 @@ class FreelyRotatingChain:
     #
     def __compute_end_to_end_distribution(self):
         """
-        Defines the end-to-end distribution based on the freely rotating chain (FRC).
-        This is where we actually perform the polymer model calculation.
+        Build and cache the Gaussian end-to-end distribution.
 
-        The mean-squared end-to-end distance uses the exact finite-N freely-rotating-chain
-        result, and the distribution is the corresponding Gaussian chain form
+        The mean-squared end-to-end distance is the exact finite-N freely
+        rotating chain result (see the class docstring), and the distribution is
+        the corresponding Gaussian
 
-            P(r) = 4π r² (3 / 2π⟨R²⟩)^{3/2} exp( -3 r² / 2⟨R²⟩ ).
+        .. math::
+
+           P(r) = 4\\pi r^2 \\left( \\frac{3}{2\\pi \\langle R^2 \\rangle} \\right)^{3/2}
+                  \\exp\\left( -\\frac{3 r^2}{2 \\langle R^2 \\rangle} \\right)
+
+        evaluated from 0 to four times the root-mean-square size.
 
         """
 

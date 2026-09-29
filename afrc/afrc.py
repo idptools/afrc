@@ -1,6 +1,14 @@
 """
 afrc.py
-An analytical version of the Flory Random Coil (FRC) for polypeptides, implemented using the rotational isomeric state approximation of Flory and Volkenstein and parameterized on the excluded volume dihedral backbone maps.
+
+The Analytical Flory Random Coil (AFRC): a closed-form, sequence-specific
+description of a polypeptide behaving as an ideal chain. It is fit to numerical
+Flory Random Coil ensembles generated with the rotational isomeric state
+approximation of Flory and Volkenstein, using backbone dihedral maps.
+
+This module provides ``AnalyticalFRC``, the main user-facing object.
+
+Copyright Alex Holehouse 2018-2026 (holehouselab.com).
 
 """
 import numpy as np
@@ -17,27 +25,47 @@ __all__ = ['AFRCException', 'AnalyticalFRC']
 
 class AnalyticalFRC:
     """
-    The AnalyticalFRC object is the main user-facing object that the AFRC 
-    package provides. All functionality is associated with function called 
-    from this object, and the object itself is instantiated with a single    
-    amino acid string. For all intents and purposes, one can think of as 
-    an *AnalyticalFRC* object as holding one protein sequence and providing
-    an interface to ask specific types of polymer questions.
+    The Analytical Flory Random Coil for a single amino acid sequence.
+
+    This is the main object the package provides. You build it from one
+    sequence and then ask it polymer questions - mean dimensions, full
+    distributions, inter-residue distances, contact fractions, PRE profiles and
+    so on.
 
     .. code-block:: python
 
-          from afrc import AnalyticalFRC
-          MyProtein = AnalyticalFRC('KFGGPRDQGSRHDSEQDNSDNNTIFVQGLG')
+       from afrc import AnalyticalFRC
 
-    Note
-    ----
-    Distributions and parameters are only calculated as requested, such that
-    initializing an AnalyticalFRC object is a cheap operation. However,
-    operations relating to intramolecular distances (``get_distance_map()``,
-    ``get_internal_scaling()`` etc.) are more computationally expensive.
+       protein = AnalyticalFRC('KFGGPRDQGSRHDSEQDNSDNNTIFVQGLG')
+       protein.get_mean_radius_of_gyration()
 
+    Attributes
+    ----------
+    seq : str
+        The sequence (upper-case).
 
-        
+    p_of_r_resolution : float
+        Grid spacing (in Angstroms) used for every distribution.
+
+    worm_like_chain : WormLikeChain
+        A Zhou worm-like chain with the same number of residues (default
+        ``lp`` and ``aa_size``), provided for convenience.
+
+    Notes
+    -----
+    Nothing is computed until it is requested, so building the object is
+    cheap. Methods that visit every pair of residues (distance maps, contact
+    maps, internal scaling and the Kirkwood-Riseman :math:`R_h`) build an
+    [n x n] matrix of sub-chains on first use, which is the most expensive
+    step, and then keep it. Methods that need one pair, or one row of pairs
+    (the PRE profile), build only the segments they need.
+
+    Inter-residue quantities between residues :math:`i` and :math:`j` treat the
+    segment between them as a chain of :math:`|i - j|` residues, taking its
+    composition from the sequence between the two. Whole-chain quantities use
+    all :math:`N` residues, so ``get_mean_interresidue_distance(0, N-1)`` is
+    slightly smaller than ``get_mean_end_to_end_distance()``.
+
     """
 
 
@@ -45,23 +73,26 @@ class AnalyticalFRC:
     #
     def __init__(self, seq, adaptable_P_res=False):
         """
-        Constructor for an AFRC object which can be queried to obtain varies 
-        parameters and statistics.
+        Create an AnalyticalFRC object from an amino acid sequence.
 
         Parameters
         ----------
         seq : str
-            Amino acid sequence for the protein of interest (case insensitive).
-            If this is an invalid (or empty) string it will raise an AFRCException.
+            Amino acid sequence (case insensitive). Only the 20 standard amino
+            acids are allowed.
 
-        adaptable_P_res : Bool (False)
-           Sets the resolution used for generating probability distributions. 
-           By default this is assigned to a fixed value (0.05 A). However, if 
-           this flag set to True a sequence-specific adaptable resolution           
-           is used and calculated as :math:`d_{max} / 500.00` (where :math:`d_{max}` 
-           reflects the contour length of the polypeptide and is defined as 
-           :math:`3.7n`.
-                              
+        adaptable_P_res : bool
+            If False (default) every distribution uses a fixed grid spacing of
+            0.05 A. If True the spacing is set to :math:`d_{max}/500`, where
+            :math:`d_{max} = 3.7N` approximates the contour length. This changes
+            the discretization only, not the model.
+
+        Raises
+        ------
+        AFRCException
+            If ``seq`` is not a string, is empty, or contains a non-standard
+            amino acid.
+
         """
 
         try:
@@ -79,7 +110,7 @@ class AnalyticalFRC:
 
         # check a valid string was passed and assign to object variable
         self.__check_seq_is_valid(seq)
-        self.seq = seq 
+        self.seq = seq
 
         # set up what our P of R spacing will look like...
         if adaptable_P_res:
@@ -102,18 +133,20 @@ class AnalyticalFRC:
     #
     def __check_seq_is_valid(self, seq):
         """
-        Helper function that ensures the passed sequence contains ONLY 
-        valid amino acids (upper-case).
-
-        No return value and totally stateless.
+        Check that a sequence contains only the 20 standard amino acids.
 
         Parameters
-        ------------
-        seq : string
-            Amino acid sequence
+        ----------
+        seq : str
+            Upper-case amino acid sequence.
+
+        Raises
+        ------
+        AFRCException
+            If any character is not a standard amino acid.
 
         """
-        for i in seq: 
+        for i in seq:
             if i not in AA_list:
                 raise AFRCException(f'Passed amino acid sequence contains non-standard amino acids [{i}]')
 
@@ -123,12 +156,19 @@ class AnalyticalFRC:
     #
     def __build_matrix(self):
         """
+        Build the [n x n] matrix of inter-residue PolymerObjects, if not already built.
 
-        Internal function that limits matrix construction until its actually needed! 
-        The matrix in question here is an [n x n] matrix of PolymerObjects for querying 
-        inter-residue distances. This is computationally a tad expensive to build, so this 
-        function employs a memoization approach whereby IF the matrix is needed
-        it is built, but only if
+        Element ``[i][j]`` (and ``[j][i]``) describes the segment between
+        residues ``i`` and ``j``, built from ``seq[i:j]``. The diagonal holds
+        zero-length PolymerObjects. This is only needed by the methods that
+        visit every pair (distance and contact maps, internal scaling and the
+        Kirkwood-Riseman :math:`R_h`), so it is built once, on first use, and
+        then kept.
+
+        Note that the matrix entries do *not* cache their distributions. Keeping
+        a full P(r) grid for every pair costs gigabytes of memory for a few
+        hundred residues (6.8 GB at 400 residues), whereas recomputing one takes
+        tens of microseconds.
 
         """
 
@@ -144,15 +184,15 @@ class AnalyticalFRC:
                 # for each second residue in the sequence
                 for j in range(0, len(self.seq)):
                     row.append(0)
-                    
+
                 self.matrix.append(row)
 
             ## the second set of for-loops defines the inter-residue
             ## distance for each unique pair of residues
             for i in range(0, len(self.seq)):
                 for j in range(i, len(self.seq)):
-                    subseq = self.seq[i:j]                
-                    self.matrix[i][j] = PolymerObject(subseq, self.p_of_r_resolution)
+                    subseq = self.seq[i:j]
+                    self.matrix[i][j] = PolymerObject(subseq, self.p_of_r_resolution, cache_distributions=False)
                     self.matrix[j][i] = self.matrix[i][j]
         else:
             pass
@@ -160,32 +200,75 @@ class AnalyticalFRC:
 
 
     # .....................................................................................
-    #        
+    #
+    def __get_pair(self, R1, R2):
+        """
+        Return the PolymerObject for the segment between two residues.
+
+        If the inter-residue matrix has already been built we use its entry.
+        Otherwise we build just this one segment - building the whole matrix
+        for a single pair made one-off queries on long sequences very slow (over
+        10 s for 1000 residues).
+
+        Parameters
+        ----------
+        R1 : int
+            Index of the first residue (already validated).
+
+        R2 : int
+            Index of the second residue (already validated). The order of ``R1``
+            and ``R2`` does not matter.
+
+        Returns
+        -------
+        PolymerObject
+            The segment between the two residues, built from
+            ``seq[min(R1, R2):max(R1, R2)]``, exactly as in the matrix. It does
+            not cache its distributions.
+
+        """
+
+        if self.matrix is not False:
+            return self.matrix[R1][R2]
+
+        return PolymerObject(self.seq[min(R1, R2):max(R1, R2)], self.p_of_r_resolution, cache_distributions=False)
+
+
+
+    # .....................................................................................
+    #
     def __len__(self):
         """
-        Returns the length of the sequence
+        Return the number of residues in the sequence.
+
+        Returns
+        -------
+        int
+            Sequence length.
+
         """
         return len(self.seq)
 
 
     def __validate_residue_index(self, R):
         """
-        Internal function that validates a passed residue index actually makes sense
+        Check that a residue index is a valid, zero-based position in the sequence.
 
         Parameters
-        -----------
-        R : int (or a type castable to integer)
-            An integer to be used for residue selection
+        ----------
+        R : int
+            Residue index (or anything that can be cast to an int).
 
         Returns
-        ----------
+        -------
         int
-            If this works returns the same integer (cast to an integer and everything!), else
-            it will raises an exception 
+            The index, cast to an int.
 
         Raises
-        ----------
+        ------
         AFRCException
+            If ``R`` cannot be cast to an int, or lies outside
+            ``[0, len(seq) - 1]``.
 
         """
 
@@ -204,40 +287,37 @@ class AnalyticalFRC:
             raise AFRCException('Residues %i cannot be over the chain length (%s)...'%(R, len(self)-1))
 
         return R
-            
+
 
 
     # .....................................................................................
     #
     def get_distance_map(self, calculation_mode='scaling law', symmetric_map=False):
         """
-        Returns the complete inter-residue distance map, an [n x n] upper-right triangle
-        matrix that can be used as a reference set for constructing scaling maps.
+        Return the mean inter-residue distance for every pair of residues.
 
-        Distances are in angstroms and are measured from the residue center of mass.
-        
         Parameters
         ----------
-        calculation_mode : string (default = 'scaling law')
-            A selector which must be equal to one of a specific set of options:
+        calculation_mode : str
+            Either ``'scaling law'`` (default), which uses
+            :math:`\\langle r_{ij} \\rangle = R_0 |i - j|^{0.5}`, or
+            ``'distribution'``, which takes the expectation over each pair's
+            distance distribution. The two agree to within about 0.3%.
 
-            'distribution' - means the P(r) distribution is used to calculate average distances
-
-            'scaling law'  - means the derived scaling relationships are used to calculate the 
-                             average distance
-
-            If one of these is not provided then  an AFRCException is raised.
-
-        symmetric_map : bool (default = False)
-            If True, a full [n x n] matrix is returned, if False only the upper right triangle
-            is returned.
+        symmetric_map : bool
+            If True, return the full symmetric matrix. If False (default), only
+            the upper triangle is filled and the lower triangle is zero.
 
         Returns
         -------
         np.ndarray
-           An [n x n] square matrix (where n = length of the amino acid sequence) defining
-           the inter-residue distances between every pair of residues. 
-        
+            An [n x n] matrix of mean inter-residue distances (in Angstroms).
+
+        Raises
+        ------
+        AFRCException
+            If ``calculation_mode`` is not recognized.
+
         """
 
         # check input mode information
@@ -248,7 +328,7 @@ class AnalyticalFRC:
 
         # initialize the distance-distance matrix
         dm = np.zeros((len(self.seq),len(self.seq)))
-        
+
         # for each inter-residue distance (only the upper-right
         # triangle is computed)
         for i in range(0,len(self.seq)):
@@ -265,52 +345,52 @@ class AnalyticalFRC:
     #
     def get_internal_scaling(self, calculation_mode='scaling law'):
         """
-        Returns the internal scaling profile - an [n-1 by 2] matrix that reports on the average
-        distance between all residues that are k positions apart (where k is :math:`|i - j|`). 
+        Return the internal scaling profile.
 
-        Distances are in angstroms and are measured from the residue center of mass.
-
-        A linear log-log fit of this data gives a gradient of 0.5 (:math:`\\nu^{app} = 0.5`).
+        This is the mean distance between residues that are :math:`|i - j|`
+        apart in sequence, averaged over every such pair. A log-log fit of the
+        profile gives a slope of 0.5.
 
         Parameters
         ----------
-        calculation_mode : string (keyword)
-            calculation_mode defines the mode in which each inter-residue average is
-            calculated, and can be set to either 'scaling law' (default) or
-            'distribution'. If 'distribution' is used then the complete Re distribution
-            is used to calculate the expected value. If the 'scaling law' is used then
-            the standard Re = R0 * N^{0.5} is used.
+        calculation_mode : str
+            Either ``'scaling law'`` (default) or ``'distribution'`` - see
+            ``get_distance_map()``.
 
         Returns
         -------
         np.ndarray
-           An [n-1 x 2] matrix (where n = length of the amino acid sequence), with one row
-           per sequence separation | i-j | from 1 to n-1. The first column is the set of
-           | i-j | separations, and the second defines the average inter-residue distance
-           between every pair of residues that are | i-j | residues apart in sequence space.
-        
+            An [n-1 x 2] matrix with one row per sequence separation. The first
+            column is :math:`|i - j|` (1 to n-1) and the second is the mean
+            distance (in Angstroms) at that separation.
+
+        Raises
+        ------
+        AFRCException
+            If ``calculation_mode`` is not recognized.
+
         """
 
         # validate mode and construct the matrix if not yet built
         calculation_mode = validate_keyword(['distribution','scaling law'], calculation_mode, 'calculation_mode')
         self.__build_matrix()
 
-        # set the empty dictionary and iterate through all non-redundant distances        
+        # set the empty dictionary and iterate through all non-redundant distances
         rij={}
 
 
         # now cycle through every non-redundant pair
         for i in range(0,len(self.seq)):
             for j in range(i+1,len(self.seq)):
-                
-                # if empty initialize 
+
+                # if empty initialize
                 if j-i not in rij:
                     rij[j-i] = []
 
                 rij[j-i].append(self.matrix[i][j].get_mean_end_to_end_distance(calculation_mode))
-                    
+
         # having established all possible distances we then
-        # calculate the average 
+        # calculate the average
         k = list(rij)
         k.sort()
         mean_vals= []
@@ -318,21 +398,24 @@ class AnalyticalFRC:
             mean_vals.append(np.mean(rij[dis]))
 
         return np.array((k,mean_vals)).transpose()
-     
-                   
+
+
 
     # .....................................................................................
-    #            
-    def get_radius_of_gyration_distribution(self):        
+    #
+    def get_radius_of_gyration_distribution(self):
         """
-        Defines the radius of gyration (:math:`R_g`) distribution using equation (3) from [Lhuillier1988]_. 
+        Return the radius of gyration (:math:`R_g`) distribution.
+
+        This uses equation 3 of [Lhuillier1988]_ with the composition-weighted
+        AFRC prefactor.
 
         Returns
         -------
-
-        tuple of arrays
-           A 2-pair tuple of numpy arrays where the first is the distance (in Angstroms) and 
-           the second array is the probability of that distance.
+        tuple of np.ndarray
+            ``(radii, probabilities)``, where radii are in Angstroms and the
+            probabilities are a normalized probability mass function (they sum
+            to 1).
 
         """
 
@@ -344,16 +427,20 @@ class AnalyticalFRC:
     #
     def get_end_to_end_distribution(self):
         r"""
-        Defines the end-to-end distance (Re) distribution using the standard end-to-end model (as in [Rubinstein2003]_). 
-        
+        Return the end-to-end distance (:math:`R_e`) distribution.
+
+        This is the Gaussian chain distribution (see [Rubinstein2003]_)
+
         :math:`P(r) = 4\pi r^2 \left( \frac{3}{2\pi \langle r^2 \rangle} \right)^{3/2} e^{-\frac{3 r^2}{2 \langle r^2 \rangle}}`
+
+        with :math:`\sqrt{\langle r^2 \rangle} = R_0^{rms} N^{0.5}`.
 
         Returns
         -------
-
-        tuple of arrays
-           A 2-pair tuple of numpy arrays where the first is the distance (in Angstroms) and
-           the second array is the probability of that distance.
+        tuple of np.ndarray
+            ``(distances, probabilities)``, where distances are in Angstroms and
+            the probabilities are a normalized probability mass function (they
+            sum to 1).
 
         """
 
@@ -362,25 +449,28 @@ class AnalyticalFRC:
 
 
     # .....................................................................................
-    #        
+    #
     def get_mean_radius_of_gyration(self, calculation_mode='distribution'):
         """
-        Returns the mean radius of gyration (:math:`R_g`).
+        Return the mean radius of gyration, :math:`\\langle R_g \\rangle`.
 
         Parameters
         ----------
         calculation_mode : str
-             calculation_mode defines the mode in which the average is calculated, and can be
-             set to either 'distribution' (default) or 'scaling law'. If 'distribution' is used
-             then the complete Rg distribution is used to calculate the expected value. If the
-             'scaling law' is used then the standard Rg = RG_R0 * N^{0.5} is used, where RG_R0
-             is the composition-weighted radius of gyration prefactor. The two modes agree to
-             well within a percent.
+            Either ``'distribution'`` (default), which takes the expectation over
+            the :math:`R_g` distribution, or ``'scaling law'``, which uses
+            :math:`\\langle R_g \\rangle = R_0^{g} N^{0.5}` with the
+            composition-weighted prefactor. The two agree to well within 0.1%.
 
         Returns
         -------
         float
-           Value equal to the mean radius of gyration.
+            The mean radius of gyration (in Angstroms).
+
+        Raises
+        ------
+        AFRCException
+            If ``calculation_mode`` is not recognized.
 
         """
 
@@ -391,25 +481,28 @@ class AnalyticalFRC:
 
 
     # .....................................................................................
-    #        
+    #
     def get_mean_end_to_end_distance(self, calculation_mode='scaling law'):
         """
-        Returns the mean end-to-end distance (:math:`R_e`).
+        Return the mean end-to-end distance, :math:`\\langle R_e \\rangle`.
 
         Parameters
         ----------
-
-        calculation_mode : string (keyword)
-             calculation_mode defines the mode in which the average is calculated, and can be 
-             set to either 'scaling law' (default) or 'distribution'. If 'distribution' is used
-             then the complete Re distribution is used to calculate the expected value. If the
-             'scaling law' is used then the standard Re = R0 * N^{0.5} is used.        
-
+        calculation_mode : str
+            Either ``'scaling law'`` (default), which uses
+            :math:`\\langle R_e \\rangle = R_0 N^{0.5}`, or ``'distribution'``,
+            which takes the expectation over the end-to-end distribution. The two
+            agree to within about 0.3%.
 
         Returns
         -------
         float
-           Value equal to the average end-to-end distance (as defined by ``calculation_mode``).
+            The mean end-to-end distance (in Angstroms).
+
+        Raises
+        ------
+        AFRCException
+            If ``calculation_mode`` is not recognized.
 
         """
 
@@ -418,67 +511,63 @@ class AnalyticalFRC:
         return self.full_seq_PO.get_mean_end_to_end_distance(calculation_mode)
 
     # .....................................................................................
-    #        
+    #
     def get_mean_hydrodynamic_radius(self, calculation_mode='kirkwood-riseman'):
         """
-        Returns the average hydrodynamic radius, calculated either using the Kirkwood-Riseman
-        equation or using the empirical Rg-to-Rh conversion scheme developed by Nygaard et al.
+        Return the mean hydrodynamic radius, :math:`R_h`.
 
-        In "kirkwood-riseman" mode the hydrodynamic radius is
+        In ``'kirkwood-riseman'`` mode (default) this is
 
         .. math::
 
            R_h = \\left\\langle \\frac{1}{r_{ij}} \\right\\rangle_{i \\neq j}^{-1}
 
-        where the average runs over every pair of residues in the chain and, for each
-        pair, over the AFRC's Gaussian inter-residue distance distribution. That inner
-        average has the closed form :math:`\\langle 1/r_{ij} \\rangle = \\sqrt{6 / (\\pi
-        \\langle r_{ij}^2 \\rangle)}`, so the result is exact for the model - no numerical
-        integration is involved. Note that this is the mean of the *inverse* distance, as
-        the Kirkwood-Riseman equation requires; it is not the inverse of the mean
-        distance (for a Gaussian chain the two differ by a factor of :math:`4/\\pi`).
-        This is the same form of the equation used by Nygaard et al. [1] and Pesce et al.
-        [3], and by the ``mode='kr'`` option in SOURSOP.
+        where the average runs over every pair of residues and, for each pair,
+        over its Gaussian distance distribution. The inner average has the closed
+        form :math:`\\langle 1/r_{ij} \\rangle = \\sqrt{6 / (\\pi \\langle r_{ij}^2 \\rangle)}`,
+        so the result is exact for the model. Note that this is the mean of the
+        *inverse* distance, which is what the Kirkwood-Riseman equation needs - not
+        the inverse of the mean distance, which for a Gaussian chain is larger by
+        a factor of :math:`4/\\pi`. This is the same form used by Nygaard et al.
+        [1], Pesce et al. [3] and SOURSOP's ``mode='kr'``.
 
-        In "nygaard" mode the empirical relationship between :math:`R_g`, :math:`R_h` and
-        chain length from Nygaard et al. [1] is applied to the mean radius of gyration.
+        In ``'nygaard'`` mode we instead apply the empirical :math:`R_g`-to-
+        :math:`R_h` conversion of Nygaard et al. [1] to the mean radius of
+        gyration.
 
         Parameters
         ----------
-
-        calculation_mode : string (keyword)
-            Defines how the hydrodynamic radius should be calculated. Must be one of either
-            "kirkwood-riseman" or "nygaard".
+        calculation_mode : str
+            Either ``'kirkwood-riseman'`` (default) or ``'nygaard'``.
 
         Returns
         -------
         float
-           Value equal to the average hydrodynamic radius (in Angstroms).
+            The mean hydrodynamic radius (in Angstroms).
 
         Raises
         ------
         AFRCException
-           If the chain has fewer than two residues. In "kirkwood-riseman" mode there
-           are then no inter-residue distances to average over, and in "nygaard" mode
-           the :math:`N^{0.60} - N^{0.33}` denominator of the empirical relationship
-           vanishes.
+            If ``calculation_mode`` is not recognized, or the chain has fewer
+            than two residues (Kirkwood-Riseman then has no pairs to average
+            over, and the Nygaard denominator :math:`N^{0.60} - N^{0.33}` is
+            zero).
 
         References
-        -------------
-        [1] Nygaard M, Kragelund BB, Papaleo E, Lindorff-Larsen K. An Efficient
-        Method for Estimating the Hydrodynamic Radius of Disordered Protein
-        Conformations. Biophys J. 2017;113: 550–557.
+        ----------
+        [1] Nygaard, M., Kragelund, B. B., Papaleo, E., & Lindorff-Larsen, K.
+        (2017). An efficient method for estimating the hydrodynamic radius of
+        disordered protein conformations. Biophysical Journal, 113(3), 550-557.
 
-        [2] Kirkwood, J. G., & Riseman, J. (1948). The Intrinsic Viscosities
-        and Diffusion Constants of Flexible Macromolecules in Solution.
-        The Journal of Chemical Physics, 16(6), 565–573.
+        [2] Kirkwood, J. G., & Riseman, J. (1948). The intrinsic viscosities
+        and diffusion constants of flexible macromolecules in solution.
+        The Journal of Chemical Physics, 16(6), 565-573.
 
         [3] Pesce, F., Newcombe, E. A., Seiffert, P., Tranchant, E. E.,
         Olsen, J. G., Grace, C. R., Kragelund, B. B., & Lindorff-Larsen, K.
         (2023). Assessment of models for calculating the hydrodynamic radius
         of intrinsically disordered proteins. Biophysical Journal, 122(2),
         310-321.
-
 
         """
 
@@ -508,7 +597,9 @@ class AnalyticalFRC:
 
             return (1/Rg_over_Rh)*rg
 
-        elif calculation_mode == 'kirkwood-riseman':
+        # calculation_mode has already been validated, so the only other option
+        # is 'kirkwood-riseman'
+        else:
 
             # the Kirkwood-Riseman equation averages the INVERSE inter-residue
             # distance, <1/r_ij>, over every pair of residues. Each PolymerObject in
@@ -530,68 +621,72 @@ class AnalyticalFRC:
     #
     def get_interresidue_distance_distribution(self, R1, R2):
         """
-        Returns the distribution between a pair of residues on the chain.
+        Return the distance distribution between two residues.
 
-        
         Parameters
         ----------
-
         R1 : int
-           The first residue of the pair being investigated.
+            Index of the first residue (zero-based).
 
         R2 : int
-           The second residue of the pair being investigated.
-
+            Index of the second residue (zero-based). The order of ``R1`` and
+            ``R2`` does not matter.
 
         Returns
         -------
-
         tuple of np.ndarray
-           A 2-pair tuple ``(distances, probabilities)`` where the first array is the
-           distance (in Angstroms) and the second is the corresponding probability.
+            ``(distances, probabilities)``, where distances are in Angstroms and
+            the probabilities are a normalized probability mass function (they
+            sum to 1). If ``R1 == R2`` all the weight sits at zero.
+
+        Raises
+        ------
+        AFRCException
+            If either residue index is invalid.
 
         """
 
         R1 = self.__validate_residue_index(R1)
         R2 = self.__validate_residue_index(R2)
- 
+
         if R1 == R2:
             return (np.array([0.0]), np.array([1.0]))
 
-        self.__build_matrix()
-        return self.matrix[R1][R2].get_end_to_end_distribution()
+        return self.__get_pair(R1, R2).get_end_to_end_distribution()
 
 
 
     # .....................................................................................
     #
     def get_mean_interresidue_distance(self, R1, R2, calculation_mode='scaling law'):
-
         """
-        Returns the mean distance between a pair of residues on the chain.
-        
+        Return the mean distance between two residues.
+
         Parameters
         ----------
-
         R1 : int
-           The first residue of the pair being investigated.
+            Index of the first residue (zero-based).
 
         R2 : int
-           The second residue of the pair being investigated.
+            Index of the second residue (zero-based). The order of ``R1`` and
+            ``R2`` does not matter.
 
-        calculation_mode : string (keyword)
-             calculation_mode defines the mode in which the average is calculated, and can be
-             set to either 'scaling law' (default) or 'distribution'. If 'distribution' is used
-             then the complete Re distribution is used to calculate the expected value. If the
-             'scaling law' is used then the standard Re = R0 * N^{0.5} is used.
-
+        calculation_mode : str
+            Either ``'scaling law'`` (default), which uses
+            :math:`\\langle r_{ij} \\rangle = R_0 |i - j|^{0.5}`, or
+            ``'distribution'``, which takes the expectation over the pair's
+            distance distribution.
 
         Returns
         -------
-
         float
-           The mean distance (in Angstroms) between residues R1 and R2.
+            The mean distance between ``R1`` and ``R2`` (in Angstroms), or 0.0 if
+            ``R1 == R2``.
 
+        Raises
+        ------
+        AFRCException
+            If either residue index or ``calculation_mode`` is invalid.
 
         """
         calculation_mode = validate_keyword(['distribution','scaling law'], calculation_mode, 'calculation_mode')
@@ -602,10 +697,7 @@ class AnalyticalFRC:
         if R1 == R2:
             return 0.0
 
-
-        self.__build_matrix()
-
-        return self.matrix[R1][R2].get_mean_end_to_end_distance(calculation_mode)
+        return self.__get_pair(R1, R2).get_mean_end_to_end_distance(calculation_mode)
 
 
     # .....................................................................................
@@ -613,30 +705,33 @@ class AnalyticalFRC:
 
     def get_mean_interresidue_radius_of_gyration(self, R1, R2, calculation_mode='scaling law'):
         """
-        Returns the mean radius of gyration (:math:`R_g`) as calculated from the 
-        :math:`R_g` distribution BETWEEN a pair of residues (i.e. the :math:`R_g` distribution
-        for an internal local region of the chain).
+        Return the mean radius of gyration of the segment between two residues.
 
         Parameters
         ----------
-
         R1 : int
-           The first residue of the pair being investigated.
+            Index of the first residue (zero-based).
 
         R2 : int
-           The second residue of the pair being investigated.
+            Index of the second residue (zero-based). The order of ``R1`` and
+            ``R2`` does not matter.
 
-        calculation_mode : string (keyword)
-             calculation_mode defines the mode in which the average is calculated, and can be
-             set to either 'scaling law' (default) or 'distribution'. If 'distribution' is used
-             then the complete Rg distribution is used to calculate the expected value. If the
-             'scaling law' is used then the standard Rg = RG_R0 * N^{0.5} is used.
-
+        calculation_mode : str
+            Either ``'scaling law'`` (default), which uses
+            :math:`\\langle R_g \\rangle = R_0^{g} |i - j|^{0.5}`, or
+            ``'distribution'``, which takes the expectation over the segment's
+            :math:`R_g` distribution.
 
         Returns
         -------
         float
-           Value equal to the mean radius of gyration.
+            The mean radius of gyration of the segment (in Angstroms), or 0.0 if
+            ``R1 == R2``.
+
+        Raises
+        ------
+        AFRCException
+            If either residue index or ``calculation_mode`` is invalid.
 
         """
         calculation_mode = validate_keyword(['distribution','scaling law'], calculation_mode, 'calculation_mode')
@@ -644,31 +739,30 @@ class AnalyticalFRC:
         R1 = self.__validate_residue_index(R1)
         R2 = self.__validate_residue_index(R2)
 
-        self.__build_matrix()
-
         if R1 == R2:
             return 0.0
 
-        return self.matrix[R1][R2].get_mean_radius_of_gyration(calculation_mode)
-        
+        return self.__get_pair(R1, R2).get_mean_radius_of_gyration(calculation_mode)
+
 
     # .....................................................................................
     #
     def sample_radius_of_gyration_distribution(self,n=1000):
         """
-        Subsamples from the :math:`R_g` distribution to generate an uncorrelated 'trajectory'
-        of points. Useful for creating a size-matched sample to compare with simulation
-        data.
+        Draw random radii of gyration from the :math:`R_g` distribution.
+
+        Useful for building a size-matched, uncorrelated sample to compare
+        against simulation data.
 
         Parameters
         ----------
         n : int
-           Number of random values to sample (default = 1000)
+            Number of values to draw. Default is 1000.
 
         Returns
         -------
         np.ndarray
-           Returns an n-length array with n independent values (floats)
+            ``n`` independent radii of gyration (in Angstroms).
 
         """
 
@@ -680,53 +774,57 @@ class AnalyticalFRC:
     #
     def sample_end_to_end_distribution(self,n=1000):
         """
-        Subsamples from the end-to-end distance distribution to generate an uncorrelated 
-        'trajectory' of points. Useful for creating a size-matched sample to compare with
-        simulation data.
+        Draw random end-to-end distances from the end-to-end distribution.
+
+        Useful for building a size-matched, uncorrelated sample to compare
+        against simulation data.
 
         Parameters
         ----------
         n : int
-           Number of random values to sample (default = 1000)
-        
+            Number of values to draw. Default is 1000.
+
         Returns
         -------
         np.ndarray
-           Returns an n-length array with n independent values (floats)
+            ``n`` independent end-to-end distances (in Angstroms).
 
         """
 
         return self.full_seq_PO.sample_end_to_end_distribution(dist_size=n)
 
-    
+
     # .....................................................................................
     #
     def sample_inter_residue_distance_distribution(self, R1, R2, n=1000):
         """
-        Subsamples from the inter-residue distance distribution (between residues
-        R1 and R2) to generate an uncorrelated 'trajectory' of points. Useful for
-        creating a size-matched sample to compare with simulation data.
+        Draw random distances between two residues from their distance distribution.
+
+        Useful for building a size-matched, uncorrelated sample to compare
+        against simulation data.
 
         Parameters
         ----------
         R1 : int
-           The first residue of the pair being investigated.
+            Index of the first residue (zero-based).
 
         R2 : int
-           The second residue of the pair being investigated.
+            Index of the second residue (zero-based). The order of ``R1`` and
+            ``R2`` does not matter.
 
         n : int
-           Number of random values to sample (default = 1000)
+            Number of values to draw. Default is 1000.
 
         Returns
         -------
         np.ndarray
-           Returns an n-length array with n independent values (floats)
+            ``n`` independent distances (in Angstroms). If ``R1 == R2`` every
+            value is 0.
 
         Raises
         ------
         AFRCException
-           If either residue index is invalid.
+            If either residue index is invalid.
 
         """
 
@@ -736,39 +834,41 @@ class AnalyticalFRC:
         R1 = self.__validate_residue_index(R1)
         R2 = self.__validate_residue_index(R2)
 
-        # construct the internal matrix of polymers
-        self.__build_matrix()
-
-        return self.matrix[R1][R2].sample_end_to_end_distribution(dist_size=n)
+        return self.__get_pair(R1, R2).sample_end_to_end_distribution(dist_size=n)
 
 
     # .....................................................................................
     #
     def get_contact_fraction(self, R1, R2, threshold):
         """
-        Function that - given two residues (R1, and R2) and a distance threshold in Angstroms (threshold)
-        returns the fraction of the time the center-of-mass distance between R1 and R2 is < threshold.
+        Return the fraction of the time two residues are closer than a threshold.
 
-        Practically, if we set threshold = 5, this gives you the expected contact fraction for two residues,
-        which is a useful normalization factor.
+        This is the cumulative probability of the inter-residue distance
+        distribution below ``threshold``. With a threshold of around 5 A this
+        gives the expected contact fraction for a pair of residues under the
+        AFRC, which is a useful normalization factor.
 
         Parameters
-        -------------
+        ----------
         R1 : int
-            First residue - must be between 0 and length of the polymer
+            Index of the first residue (zero-based).
 
         R2 : int
-            Second residues - must also be between 0 and length of the polymer
+            Index of the second residue (zero-based).
 
         threshold : float
-            A distance threshold in angstroms - can be a float or an int
+            Distance threshold (in Angstroms).
 
         Returns
-        ----------
+        -------
         float
-            Returns a single value between 0 and 1 that reports on the fraction
-            of the time residues R1 and R2 are closer than ``threshold`` angstroms
-            apart.
+            The contact fraction, between 0 and 1. A residue is always in
+            contact with itself, so ``R1 == R2`` returns 1.0.
+
+        Raises
+        ------
+        AFRCException
+            If either residue index is invalid or ``threshold`` is not a number.
 
         """
 
@@ -776,6 +876,13 @@ class AnalyticalFRC:
         # R1 == R2 (which otherwise short-circuits below)
         R1 = self.__validate_residue_index(R1)
         R2 = self.__validate_residue_index(R2)
+
+        # the threshold must be a number; without this a string raised a bare
+        # TypeError from inside NumPy
+        try:
+            threshold = float(threshold)
+        except (TypeError, ValueError):
+            raise AFRCException('Could not convert threshold [%s] to a number' % (threshold))
 
         if R1 == R2:
             return 1.0
@@ -791,28 +898,33 @@ class AnalyticalFRC:
         # a ~1.5% relative error at a 5 A threshold on the default 0.05 A grid,
         # and considerably worse on the coarser adaptable grid
         return float(np.sum(p[r < threshold]))
-        
+
     # .....................................................................................
     #
     def get_contact_map(self, threshold, symmetric_map=False):
         """
-        Function that returns a contact map for the protein, where the contact map is a 
-        square matrix where each element is the contact fraction between two residues. 
+        Return the contact fraction for every pair of residues.
 
         Parameters
-        -------------
+        ----------
         threshold : float
-            A distance threshold in angstroms - can be a float or an int.
+            Distance threshold (in Angstroms) - see ``get_contact_fraction()``.
 
-        symmetric_map : bool (default = False)
-            If True, a full [n x n] matrix is returned, if False only the upper right triangle
-            is returned.
+        symmetric_map : bool
+            If True, return the full symmetric matrix. If False (default), only
+            the upper triangle (including the diagonal) is filled and the lower
+            triangle is zero.
 
         Returns
-        ----------
+        -------
         np.ndarray
-            Returns a square matrix where each element is the contact fraction between 
-            two residues. 
+            An [n x n] matrix of contact fractions, each between 0 and 1. The
+            diagonal is 1.
+
+        Raises
+        ------
+        AFRCException
+            If ``threshold`` is not a number.
 
         """
 
@@ -827,105 +939,112 @@ class AnalyticalFRC:
                     contact_map[j,i] = contact_map[i,j]
 
         return contact_map
-        
-        
 
 
-        
+
+
+
     def get_pre_profile(self, label_position, tau_c=4, t_delay=12, R_2D=14, W_H=2*np.pi*600e6, sample_size=10000):
         """
-        Calculate the hypothetical paramagnetic relaxation enhancement (PRE) profile
-        expected if a spin label were placed at position label_position. The
-        only required input is the label position, but additional experimental
-        parameters can be passed in as well.
+        Return the expected paramagnetic relaxation enhancement (PRE) profile for
+        a spin label at ``label_position``.
 
-        It's important to remember this method does not consider the explicit
-        position of a spin label linker, but does provide a reference model
-        as to the expected PRE profile if the chain behaved as an AFRC chain.
-        
+        For every residue we draw ``sample_size`` distances to the label from the
+        AFRC, convert each to a transverse relaxation rate
+
+        .. math::
+
+           \\Gamma_2 = \\frac{K}{r^6} \\left( 4\\tau_c + \\frac{3\\tau_c}{1 + \\omega_H^2 \\tau_c^2} \\right)
+
+        with :math:`K = 1.23 \\times 10^{-32}` cm\\ :sup:`6` s\\ :sup:`-2`, and then
+        average the intensity ratio
+        :math:`R_{2D} e^{-\\Gamma_2 t} / (R_{2D} + \\Gamma_2)` over those
+        samples. Averaging per conformer (rather than converting a mean distance)
+        matters, because relaxation depends very non-linearly on distance.
+
+        Note that the model does not account for the spin-label linker. It gives
+        the profile expected if the chain behaved as an AFRC chain.
 
         Parameters
-        -----------------------
+        ----------
         label_position : int
-            Position along the chain that is labelled. Must be between 0 and the
-            length of the sequence minus one.
+            Index of the labelled residue (zero-based).
 
         tau_c : float
-            tau_c is the effective correlation time, measured in nanoseconds, 
-            which is typically between 1 and 30. Default = 4
+            Effective correlation time, in nanoseconds. Typically between 1 and
+            30. Default is 4.
 
         t_delay : float
-            Total duration of the INEPT delays from the PRE experiment, as 
-            measured in ms. This will depend on the pulse sequence used, 
-            but is typically around 1-30 ms for HSQC. Default = 12
+            Total duration of the INEPT delays in the PRE experiment, in
+            milliseconds. This depends on the pulse sequence, but is typically
+            1-30 ms for an HSQC. Default is 12.
 
         R_2D : float
-            Is the transverse relaxation rate of the backbone amide protons in
-            the diamagnetic form of the protein, measured in Hertz (i.e. 'per
-            second'). A value of around 10 might be expected. Default = 14
+            Transverse relaxation rate of the backbone amide protons in the
+            diamagnetic protein, in Hz (per second). Around 10 is typical.
+            Default is 14.
 
         W_H : float
-            Is the proton Larmor frequency as an *angular* frequency, in rad/s
-            (:math:`\\omega_H = 2\\pi\\nu_H`). The spectral-density term of the
-            Solomon-Bloembergen prefactor evaluates
-            :math:`3\\tau_c/(1 + \\omega_H^2 \\tau_c^2)`, so the value passed here
-            is used directly as the angular frequency. For a 600 MHz magnet pass
-            ``2*np.pi*600e6`` (approximately 3.77e9), **not** ``600000000``;
-            passing the linear frequency makes the dispersive term a factor of
-            :math:`(2\\pi)^2 \\approx 39.5` too small, over-estimating gamma by
-            roughly 10% at the default tau_c. This is the same convention used by
-            SOURSOP's ``SSPRE`` class. Default = 2*pi*600e6 (a 600 MHz magnet)
+            Proton Larmor frequency as an *angular* frequency, in rad/s
+            (:math:`\\omega_H = 2\\pi\\nu_H`). For a 600 MHz magnet pass
+            ``2*np.pi*600e6`` (about 3.77e9), **not** ``600000000``; passing the
+            linear frequency makes the dispersive term :math:`(2\\pi)^2 \\approx 39.5`
+            times too small and over-estimates :math:`\\Gamma_2` by roughly 10% at
+            the default ``tau_c``. This matches the convention used by SOURSOP's
+            ``SSPRE`` class. Default is ``2*np.pi*600e6`` (a 600 MHz magnet).
 
         sample_size : int
-            Number of conformations drawn from each inter-residue distance
-            distribution when computing the relaxation rates. Larger values give a
-            smoother profile at the cost of more compute. Default = 10000
+            Number of distances drawn per residue. Larger values give a smoother
+            profile at the cost of more compute. Default is 10000.
 
         Returns
-        -----------------------
+        -------
         list
-            Returns a 3-element list.
+            A 3-element list:
 
-            [0] -  residue indices (starting at 0)
-            [1] -  PRE profile (a value between 0 and 1)
-            [2] -  PRE H1 relaxation profile (gamma), one array of per-conformation relaxation rates per residue
+            [0] - residue indices (np.ndarray, starting at 0)
+
+            [1] - the PRE intensity-ratio profile (one value between 0 and 1 per
+            residue). The labelled residue itself is 0.
+
+            [2] - the per-conformer relaxation rates :math:`\\Gamma_2` (one
+            np.ndarray of length ``sample_size`` per residue, in s\\ :sup:`-1`).
+            These are infinite for the labelled residue.
 
         Raises
-        -----------------------
+        ------
         AFRCException
-            If label_position is not a valid residue index.
+            If ``label_position`` is not a valid residue index.
 
         References
-        -------------
-        [1] Meng, W., Lyle, N., Luan, B., Raleigh, D.P., and Pappu, R.V. 
-        (2013). Experiments and simulations show how long-range
-        contacts can form in expanded unfolded proteins with negligible 
-        secondary structure.
-        Proc. Natl. Acad. Sci. U. S. A. 110, 2123-2128.
+        ----------
+        [1] Meng, W., Lyle, N., Luan, B., Raleigh, D. P., & Pappu, R. V. (2013).
+        Experiments and simulations show how long-range contacts can form in
+        expanded unfolded proteins with negligible secondary structure.
+        Proceedings of the National Academy of Sciences, 110(6), 2123-2128.
 
-        [2] Das, R.K., Huang, Y., Phillips, A.H., Kriwacki, R.W., and Pappu, 
-        R.V. (2016). Cryptic sequence features within the disordered protein 
-        p27Kip1 regulate cell cycle signaling. Proc. Natl. Acad. Sci. U. S. A. 
-        113, 5616- 5621.
-        
-        [3] Peran, I., Holehouse, A. S., Carrico, I. S., Pappu, R. V., Bilsel, 
-        O., & Raleigh, D. P. (2019). Unfolded states under folding conditions 
-        accommodate sequence-specific conformational preferences with random 
-        coil-like dimensions. Proceedings of the National Academy of Sciences 
-        of the United States of America, 116(25), 12301–12310.
+        [2] Das, R. K., Huang, Y., Phillips, A. H., Kriwacki, R. W., & Pappu,
+        R. V. (2016). Cryptic sequence features within the disordered protein
+        p27Kip1 regulate cell cycle signaling. Proceedings of the National
+        Academy of Sciences, 113(20), 5616-5621.
 
-        [4] Lalmansingh, J. M., Keeley, A. T., Ruff, K. M., Pappu, R. V., & 
-        Holehouse, A. S. (2023). SOURSOP: A Python package for the analysis 
-        of simulations of intrinsically disordered proteins. bioRxiv : The 
-        Preprint Server for Biology. https://doi.org/10.1101/2023.02.16.528879
+        [3] Peran, I., Holehouse, A. S., Carrico, I. S., Pappu, R. V., Bilsel,
+        O., & Raleigh, D. P. (2019). Unfolded states under folding conditions
+        accommodate sequence-specific conformational preferences with random
+        coil-like dimensions. Proceedings of the National Academy of Sciences,
+        116(25), 12301-12310.
 
+        [4] Lalmansingh, J. M., Keeley, A. T., Ruff, K. M., Pappu, R. V., &
+        Holehouse, A. S. (2023). SOURSOP: A Python package for the analysis
+        of simulations of intrinsically disordered proteins. Journal of
+        Chemical Theory and Computation, 19(16), 5609-5620.
 
         """
 
         # this raises an AFRCException for a negative, out-of-range or non-integer
         # label position (rather than a TypeError for e.g. a string)
         label_position = self.__validate_residue_index(label_position)
-        
+
         # local constants (show in a couple of units for clarity...)
         original_K = 1.2300e-32       # K constant in cm6*s-2
         K_IN_NM6   = original_K*1e42  # K constant in nm6 s-2
@@ -936,7 +1055,7 @@ class AnalyticalFRC:
 
         t_delay_in_seconds = t_delay/1000
 
-        # compute the prefactor term which will be used when computing the PRE dependent 
+        # compute the prefactor term which will be used when computing the PRE dependent
         # relaxation profiles
         W_H_SQUARED = W_H*W_H
         PREFACTOR = (3 * tau_c)/(1 + W_H_SQUARED * tau_c_squared)
@@ -976,15 +1095,3 @@ class AnalyticalFRC:
 
         indices = np.arange(0,len(self.seq))
         return [indices, profile, gamma]
-            
-
-
-        
-
-            
-            
-            
-
-
-
-

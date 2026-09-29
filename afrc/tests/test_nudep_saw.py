@@ -75,3 +75,42 @@ def test_rejects_out_of_range_nu(all_aa):
 
 def test_exception_is_real_exception():
     assert issubclass(nudep_saw.NuDepSAWException, Exception)
+
+
+def test_zero_length_chain_is_degenerate():
+    model = nudep_saw.NuDepSAW('')
+    dist, prob = model.get_end_to_end_distribution(nu=0.5)
+    assert dist == pytest.approx([0.0])
+    assert prob == pytest.approx([1.0])
+
+
+@pytest.mark.parametrize('prefactor', [0, -1.0])
+def test_rejects_non_positive_prefactor(all_aa, prefactor):
+    """Regression: a non-positive prefactor silently returned NaN."""
+    model = nudep_saw.NuDepSAW(all_aa)
+    with pytest.raises(nudep_saw.NuDepSAWException):
+        model.get_mean_end_to_end_distance(prefactor=prefactor)
+    with pytest.raises(nudep_saw.NuDepSAWException):
+        model.sample_end_to_end_distribution(n=10, prefactor=prefactor)
+
+
+@pytest.mark.parametrize('nu', [0.35, 0.5, 0.588])
+def test_a1_normalizes_the_distribution(nu):
+    """A1 should make the analytical P(r) integrate to one for any nu."""
+    from scipy.integrate import quad
+
+    model = nudep_saw.NuDepSAW('A')
+    g = (model.gamma - 1)/nu
+    delta = 1/(1 - nu)
+    a1 = model._NuDepSAW__compute_A1(delta, g)
+    a2 = model._NuDepSAW__compute_A2(delta, g)
+    integral, _ = quad(lambda x: 4*np.pi*a1 * x**(2 + g) * np.exp(-a2 * x**delta), 0, np.inf)
+    assert integral == pytest.approx(1.0, rel=1e-8)
+
+
+def test_sampling_respects_nu(all_aa):
+    np.random.seed(3)
+    model = nudep_saw.NuDepSAW(all_aa * 5)
+    compact = model.sample_end_to_end_distribution(n=4000, nu=0.4)
+    expanded = model.sample_end_to_end_distribution(n=4000, nu=0.6)
+    assert np.mean(expanded) > np.mean(compact)

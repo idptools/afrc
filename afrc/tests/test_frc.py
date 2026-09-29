@@ -80,3 +80,26 @@ def test_rejects_non_positive_bond_length(all_aa):
 def test_rejects_non_positive_c_inf(all_aa):
     with pytest.raises(frc.FRCException):
         frc.FreelyRotatingChain(all_aa, c_inf=0)
+
+
+def test_zero_length_chain_is_degenerate():
+    model = frc.FreelyRotatingChain('')
+    dist, prob = model.get_end_to_end_distribution()
+    assert dist == pytest.approx([0.0])
+    assert prob == pytest.approx([1.0])
+    assert np.all(model.sample_end_to_end_distribution(n=20) == 0.0)
+
+
+def test_single_bond_has_bond_length_rms():
+    """With one bond, <R^2> = b^2 whatever the bond angle."""
+    for c_inf in (0.5, 1.0, 2.0, 9.0):
+        model = frc.FreelyRotatingChain('A', c_inf=c_inf)
+        assert model.get_root_mean_squared_end_to_end_distance() == pytest.approx(3.8, rel=1e-6)
+
+
+def test_sampling_reuses_the_cached_distribution(all_aa):
+    np.random.seed(2)
+    model = frc.FreelyRotatingChain(all_aa * 3)
+    mean = model.get_mean_end_to_end_distance()
+    samples = model.sample_end_to_end_distribution(n=4000)
+    assert np.mean(samples) == pytest.approx(mean, rel=0.05)

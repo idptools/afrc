@@ -354,11 +354,11 @@ def test_contact_fraction_matches_gaussian_cdf():
     small threshold (the residual is the left-Riemann discretisation of P(r)).
     """
     from scipy.special import erf
+    from afrc.polymer import PolymerObject
 
     p = afrc.AnalyticalFRC('A'*30)
-    # force the inter-residue matrix to exist, then read the pair's <r^2>
-    p.get_interresidue_distance_distribution(0, 29)
-    mean_sq = p.matrix[0][29].RMS_Re_scaling**2
+    # the (0, 29) pair is the segment seq[0:29]; read its <r^2>
+    mean_sq = PolymerObject('A'*29).RMS_Re_scaling**2
     sigma = np.sqrt(mean_sq/3.0)
 
     def gaussian_cdf(x):
@@ -396,3 +396,319 @@ def test_pre_profile_uses_angular_larmor_frequency(protein):
     expected_ratio = prefactor(nu_H)/prefactor(2*np.pi*nu_H)
     assert expected_ratio > 1.05
     assert np.allclose(linear_run[2][5]/angular_run[2][5], expected_ratio, rtol=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# inter-residue API: conventions, symmetry, calculation modes
+# ---------------------------------------------------------------------------
+def test_worm_like_chain_attribute_matches_sequence(all_aa):
+    p = afrc.AnalyticalFRC(all_aa, adaptable_P_res=True)
+    assert p.worm_like_chain.nres == len(all_aa)
+    assert p.worm_like_chain.p_of_r_resolution == p.p_of_r_resolution
+
+
+def test_whole_chain_accessors_delegate_to_full_sequence_polymer(protein):
+    r, p = protein.get_end_to_end_distribution()
+    r_po, p_po = protein.full_seq_PO.get_end_to_end_distribution()
+    assert np.array_equal(r, r_po) and np.array_equal(p, p_po)
+
+
+def test_interresidue_quantities_are_order_independent(protein):
+    r_fwd, p_fwd = protein.get_interresidue_distance_distribution(5, 50)
+    r_rev, p_rev = protein.get_interresidue_distance_distribution(50, 5)
+    assert np.array_equal(r_fwd, r_rev) and np.array_equal(p_fwd, p_rev)
+    assert protein.get_mean_interresidue_distance(5, 50) == protein.get_mean_interresidue_distance(50, 5)
+    assert protein.get_mean_interresidue_radius_of_gyration(5, 50) == protein.get_mean_interresidue_radius_of_gyration(50, 5)
+    assert protein.get_contact_fraction(5, 50, 20.0) == protein.get_contact_fraction(50, 5, 20.0)
+
+
+def test_interresidue_segment_convention():
+    """
+    The pair (i, j) is modelled as a chain of |i - j| residues built from
+    seq[i:j], so the (0, N-1) distance is a little shorter than the whole-chain
+    end-to-end distance, which uses all N residues.
+    """
+    from afrc.polymer import PolymerObject
+
+    seq = 'MASNDYTQQATQSYGAYPTQ'
+    p = afrc.AnalyticalFRC(seq)
+    n = len(seq)
+    for mode in ('scaling law', 'distribution'):
+        expected = PolymerObject(seq[0:n-1]).get_mean_end_to_end_distance(mode)
+        assert p.get_mean_interresidue_distance(0, n-1, mode) == pytest.approx(expected, rel=1e-12)
+    assert p.get_mean_interresidue_distance(0, n-1) < p.get_mean_end_to_end_distance()
+
+
+def test_mean_interresidue_distance_modes_agree(protein):
+    scaling = protein.get_mean_interresidue_distance(10, 60, 'scaling law')
+    dist = protein.get_mean_interresidue_distance(10, 60, 'distribution')
+    assert dist == pytest.approx(scaling, rel=0.005)
+    with pytest.raises(AFRCException):
+        protein.get_mean_interresidue_distance(10, 60, 'bogus')
+
+
+def test_mean_interresidue_radius_of_gyration(protein, test_seq):
+    from afrc.polymer import PolymerObject
+
+    # a residue with itself has no extent
+    assert protein.get_mean_interresidue_radius_of_gyration(7, 7) == 0.0
+
+    # otherwise it is the Rg of the segment between the two residues
+    for mode in ('scaling law', 'distribution'):
+        expected = PolymerObject(test_seq[10:60]).get_mean_radius_of_gyration(mode)
+        assert protein.get_mean_interresidue_radius_of_gyration(10, 60, mode) == pytest.approx(expected, rel=1e-12)
+
+    # and the two modes agree
+    scaling = protein.get_mean_interresidue_radius_of_gyration(10, 60, 'scaling law')
+    dist = protein.get_mean_interresidue_radius_of_gyration(10, 60, 'distribution')
+    assert dist == pytest.approx(scaling, rel=0.002)
+
+
+def test_mean_interresidue_radius_of_gyration_validates_input(protein):
+    with pytest.raises(AFRCException):
+        protein.get_mean_interresidue_radius_of_gyration(-1, 5)
+    with pytest.raises(AFRCException):
+        protein.get_mean_interresidue_radius_of_gyration(0, len(protein))
+    with pytest.raises(AFRCException):
+        protein.get_mean_interresidue_radius_of_gyration(0, 5, 'bogus')
+
+
+def test_same_residue_rg_does_not_build_the_matrix(all_aa):
+    p = afrc.AnalyticalFRC(all_aa)
+    assert p.get_mean_interresidue_radius_of_gyration(3, 3) == 0.0
+    assert p.matrix is False
+
+
+def test_inter_residue_matrix_is_built_once(all_aa):
+    p = afrc.AnalyticalFRC(all_aa)
+    assert p.matrix is False
+    p.get_distance_map()
+    first = p.matrix
+    p.get_contact_map(10.0)
+    assert p.matrix is first
+
+
+def test_distance_map_modes_agree(all_aa):
+    p = afrc.AnalyticalFRC(all_aa)
+    scaling = p.get_distance_map('scaling law')
+    dist = p.get_distance_map('distribution')
+    upper = np.triu_indices(len(all_aa), k=1)
+    assert np.allclose(dist[upper], scaling[upper], rtol=0.004)
+    assert np.allclose(np.diag(dist), 0.0)
+
+
+def test_internal_scaling_distribution_mode(protein):
+    scaling = protein.get_internal_scaling('scaling law')
+    dist = protein.get_internal_scaling('distribution')
+    assert np.array_equal(scaling[:, 0], dist[:, 0])
+    assert np.allclose(dist[:, 1], scaling[:, 1], rtol=0.004)
+
+
+def test_same_residue_sampling_is_all_zeros(protein):
+    assert np.all(protein.sample_inter_residue_distance_distribution(12, 12, n=50) == 0.0)
+
+
+def test_contact_fraction_rejects_non_numeric_threshold(protein):
+    """Regression: a non-numeric threshold raised a bare TypeError from NumPy."""
+    with pytest.raises(AFRCException):
+        protein.get_contact_fraction(10, 40, 'close')
+    with pytest.raises(AFRCException):
+        protein.get_contact_fraction(10, 40, None)
+    # numeric strings and ints are fine
+    assert protein.get_contact_fraction(10, 40, '20') == protein.get_contact_fraction(10, 40, 20)
+
+
+def test_contact_map_symmetric_with_unit_diagonal(all_aa):
+    p = afrc.AnalyticalFRC(all_aa)
+    cm = p.get_contact_map(12.0, symmetric_map=True)
+    assert np.allclose(cm, cm.T)
+    assert np.allclose(np.diag(cm), 1.0)
+    assert np.all((cm >= 0) & (cm <= 1))
+    upper_only = p.get_contact_map(12.0)
+    assert np.allclose(np.tril(upper_only, -1), 0.0)
+    assert np.allclose(np.triu(upper_only), np.triu(cm))
+
+
+def test_contact_fraction_decreases_with_separation(protein):
+    near = protein.get_contact_fraction(20, 22, 10.0)
+    far = protein.get_contact_fraction(20, 80, 10.0)
+    assert near > far
+
+
+def test_pre_profile_labelled_residue_and_distance_dependence(protein):
+    np.random.seed(11)
+    idx, profile, gamma = protein.get_pre_profile(30, sample_size=500)
+    # the labelled residue is fully relaxed
+    assert profile[30] == 0.0
+    assert np.all(np.isinf(gamma[30]))
+    # residues far from the label are less affected than those close to it
+    assert profile[120] > profile[33]
+    assert np.all(np.asarray(profile) <= 1.0)
+    assert np.array_equal(idx, np.arange(len(protein)))
+
+
+def test_nygaard_matches_published_expression(protein):
+    """Nygaard et al. (2017) Eq. 7 with alpha1 = 0.216, alpha2 = 4.06, alpha3 = 0.821."""
+    n = len(protein)
+    rg = protein.get_mean_radius_of_gyration()
+    rg_over_rh = 0.216*(rg - 4.06*n**0.33)/(n**0.60 - n**0.33) + 0.821
+    assert protein.get_mean_hydrodynamic_radius('nygaard') == pytest.approx(rg/rg_over_rh, rel=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# input handling
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize('bad', ['ACD EF', 'ACDEF\n', 'ACDEX', 'ACDE-F', 'ACDEFB', b'ACDEF'])
+def test_malformed_sequences_raise(bad):
+    with pytest.raises(AFRCException):
+        afrc.AnalyticalFRC(bad)
+
+
+@pytest.mark.parametrize('bad', [None, ['A', 'C'], 3.5])
+def test_non_string_sequences_raise(bad):
+    with pytest.raises(AFRCException):
+        afrc.AnalyticalFRC(bad)
+
+
+def test_mixed_case_sequence_is_accepted(all_aa):
+    mixed = ''.join(c.lower() if i % 2 else c for i, c in enumerate(all_aa))
+    assert afrc.AnalyticalFRC(mixed).seq == all_aa
+
+
+@pytest.mark.parametrize('index', [np.int64(12), np.int32(12), '12', 12.0])
+def test_residue_indices_accept_integer_like_values(protein, index):
+    assert protein.get_mean_interresidue_distance(index, 40) == protein.get_mean_interresidue_distance(12, 40)
+
+
+def test_last_residue_is_a_valid_index(protein):
+    last = len(protein) - 1
+    assert protein.get_mean_interresidue_distance(0, last) > 0
+    with pytest.raises(AFRCException):
+        protein.get_mean_interresidue_distance(0, last + 1)
+
+
+# ---------------------------------------------------------------------------
+# grid resolution
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize('n', [5, 100, 400])
+def test_adaptable_resolution_does_not_change_the_answer(test_seq, n):
+    seq = (test_seq * 3)[:n]
+    default = afrc.AnalyticalFRC(seq)
+    adaptable = afrc.AnalyticalFRC(seq, adaptable_P_res=True)
+    assert adaptable.get_mean_radius_of_gyration() == pytest.approx(default.get_mean_radius_of_gyration(), rel=1e-4)
+    assert adaptable.get_mean_end_to_end_distance('distribution') == pytest.approx(default.get_mean_end_to_end_distance('distribution'), rel=1e-4)
+    # the scaling-law values do not depend on the grid at all
+    assert adaptable.get_mean_end_to_end_distance() == default.get_mean_end_to_end_distance()
+
+
+def test_adaptable_resolution_is_used_for_every_distribution(all_aa):
+    p = afrc.AnalyticalFRC(all_aa, adaptable_P_res=True)
+    for r, _ in (p.get_end_to_end_distribution(), p.get_radius_of_gyration_distribution(),
+                 p.get_interresidue_distance_distribution(2, 15)):
+        assert np.allclose(np.diff(r), p.p_of_r_resolution)
+
+
+# ---------------------------------------------------------------------------
+# contact fraction edge cases
+# ---------------------------------------------------------------------------
+def test_contact_threshold_is_strict(protein):
+    """A grid point exactly at the threshold is not counted."""
+    r, p = protein.get_interresidue_distance_distribution(10, 30)
+    threshold = r[200]
+    assert protein.get_contact_fraction(10, 30, threshold) == pytest.approx(np.sum(p[:200]), rel=1e-12)
+
+
+def test_contact_fraction_limits(protein):
+    assert protein.get_contact_fraction(10, 30, -5.0) == 0.0
+    assert protein.get_contact_fraction(10, 30, 0.0) == 0.0
+    assert protein.get_contact_fraction(10, 30, 1e9) == pytest.approx(1.0, rel=1e-12)
+
+
+def test_contact_map_rejects_non_numeric_threshold(all_aa):
+    with pytest.raises(AFRCException):
+        afrc.AnalyticalFRC(all_aa).get_contact_map('far')
+
+
+def test_distance_map_distribution_mode_symmetric(all_aa):
+    p = afrc.AnalyticalFRC(all_aa)
+    dm = p.get_distance_map('distribution', symmetric_map=True)
+    assert np.allclose(dm, dm.T)
+    assert np.allclose(np.triu(dm), p.get_distance_map('distribution'))
+
+
+# ---------------------------------------------------------------------------
+# sampling statistics
+# ---------------------------------------------------------------------------
+def test_sampling_is_reproducible_with_a_seed(protein):
+    np.random.seed(17)
+    a = (protein.sample_end_to_end_distribution(100), protein.sample_radius_of_gyration_distribution(100),
+         protein.sample_inter_residue_distance_distribution(3, 60, 100))
+    np.random.seed(17)
+    b = (protein.sample_end_to_end_distribution(100), protein.sample_radius_of_gyration_distribution(100),
+         protein.sample_inter_residue_distance_distribution(3, 60, 100))
+    for x, y in zip(a, b):
+        assert np.array_equal(x, y)
+
+
+def test_sample_means_match_the_distributions(protein):
+    np.random.seed(23)
+    n = 40000
+    re = protein.sample_end_to_end_distribution(n)
+    rg = protein.sample_radius_of_gyration_distribution(n)
+    pair = protein.sample_inter_residue_distance_distribution(3, 60, n)
+    assert np.mean(re) == pytest.approx(protein.get_mean_end_to_end_distance('distribution'), rel=0.01)
+    assert np.mean(rg) == pytest.approx(protein.get_mean_radius_of_gyration('distribution'), rel=0.01)
+    assert np.mean(pair) == pytest.approx(protein.get_mean_interresidue_distance(3, 60, 'distribution'), rel=0.01)
+
+
+def test_samples_lie_on_the_distribution_grid(protein):
+    r, _ = protein.get_interresidue_distance_distribution(3, 60)
+    assert np.all(np.isin(protein.sample_inter_residue_distance_distribution(3, 60, 300), r))
+
+
+# ---------------------------------------------------------------------------
+# PRE profile parameters
+# ---------------------------------------------------------------------------
+def _pre(protein, **kwargs):
+    np.random.seed(31)
+    return protein.get_pre_profile(40, sample_size=400, **kwargs)
+
+
+def test_pre_profile_is_reproducible_with_a_seed(protein):
+    a, b = _pre(protein), _pre(protein)
+    assert np.array_equal(a[1], b[1])
+    assert all(np.array_equal(x, y) for x, y in zip(a[2], b[2]))
+
+
+def test_pre_gamma_has_one_value_per_sample(protein):
+    _, _, gamma = _pre(protein)
+    assert all(len(g) == 400 for g in gamma)
+
+
+def test_pre_gamma_scales_with_the_spectral_density(protein):
+    """Changing tau_c rescales every Gamma_2 by the ratio of the spectral-density prefactors."""
+    omega = 2 * np.pi * 600e6
+
+    def prefactor(tau_c_ns):
+        tau = tau_c_ns * 1e-9
+        return 4 * tau + 3 * tau / (1 + (omega * tau)**2)
+
+    slow, fast = _pre(protein, tau_c=8), _pre(protein, tau_c=2)
+    expected = prefactor(8) / prefactor(2)
+    for i in (0, 20, 100):
+        assert np.allclose(slow[2][i] / fast[2][i], expected, rtol=1e-12)
+
+
+def test_pre_profile_responds_to_experimental_parameters(protein):
+    """Longer delays and correlation times give more relaxation; a larger R_2D gives less."""
+    base = np.asarray(_pre(protein)[1])
+    others = np.arange(len(base)) != 40
+    assert np.all(np.asarray(_pre(protein, t_delay=30)[1])[others] <= base[others])
+    assert np.all(np.asarray(_pre(protein, tau_c=10)[1])[others] <= base[others])
+    assert np.all(np.asarray(_pre(protein, R_2D=40)[1])[others] >= base[others])
+
+
+def test_pre_profile_is_near_one_far_from_the_label(protein):
+    profile = np.asarray(_pre(protein)[1])
+    assert profile[153] > 0.8
+    assert profile[41] < 0.1

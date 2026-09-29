@@ -113,3 +113,48 @@ def test_mean_inverse_distance_zero_length_raises():
     from afrc.exceptions import AFRCException
     with pytest.raises(AFRCException):
         PolymerObject('').get_mean_inverse_end_to_end_distance()
+
+
+def test_prefactors_are_composition_weighted():
+    """The scaling-law quantities use the composition-weighted per-residue prefactors."""
+    from afrc.config import RIJ_R0, RIJ_RMS_R0, RG_R0
+
+    seq = 'AAGGGK'
+    po = PolymerObject(seq)
+    n = len(seq)
+
+    def weighted(table):
+        return sum(table[aa] for aa in seq) / n
+
+    assert po.get_mean_end_to_end_distance() == pytest.approx(weighted(RIJ_R0) * np.sqrt(n), rel=1e-12)
+    assert po.get_mean_radius_of_gyration() == pytest.approx(weighted(RG_R0) * np.sqrt(n), rel=1e-12)
+    assert po.RMS_Re_scaling == pytest.approx(weighted(RIJ_RMS_R0) * np.sqrt(n), rel=1e-12)
+
+
+def test_end_to_end_distribution_has_the_scaling_law_rms(all_aa):
+    po = PolymerObject(all_aa)
+    dist, prob = po.get_end_to_end_distribution()
+    assert np.sqrt(np.sum(prob * dist**2)) == pytest.approx(po.RMS_Re_scaling, rel=1e-4)
+
+
+@pytest.mark.parametrize('n', [1, 20, 1000])
+def test_distribution_grids_cover_the_tails(n):
+    po = PolymerObject('G' * n)
+    for dist, prob in (po.get_end_to_end_distribution(), po.get_radius_of_gyration_distribution()):
+        assert prob[-1] < 1e-4 * prob.max()
+
+
+def test_distributions_are_cached(all_aa):
+    po = PolymerObject(all_aa)
+    assert po.get_end_to_end_distribution()[1] is po.get_end_to_end_distribution()[1]
+    assert po.get_radius_of_gyration_distribution()[1] is po.get_radius_of_gyration_distribution()[1]
+
+
+def test_sampling_before_building_distributions(all_aa):
+    """Sampling builds the distribution on demand."""
+    np.random.seed(5)
+    po = PolymerObject(all_aa)
+    re = po.sample_end_to_end_distribution(dist_size=2000)
+    rg = PolymerObject(all_aa).sample_radius_of_gyration_distribution(dist_size=2000)
+    assert np.mean(re) == pytest.approx(po.get_mean_end_to_end_distance(), rel=0.05)
+    assert np.mean(rg) == pytest.approx(po.get_mean_radius_of_gyration(), rel=0.05)

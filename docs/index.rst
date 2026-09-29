@@ -1,28 +1,19 @@
-.. afrc documentation master file, created by
-   sphinx-quickstart on Thu Mar 15 13:55:56 2018.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
 afrc – the Analytical Flory Random Coil
 =========================================================
-afrc is a Python-based package for computing polymeric properties for unfolded polypeptides using an analytical implementation of the so-called Flory Random Coil (the AFRC). 
+afrc is a Python package that computes the polymer properties of an unfolded polypeptide using an analytical implementation of the Flory Random Coil (the AFRC).
 
-Briefly, the AFRC is a pre-parameterized polymer model that recapitulates the dimensions of a polypeptide in a theta solvent. Technically speaking, this means both the second and third virial coefficients are set to zero, such that the AFRC enjoys fractal scaling with a true scaling exponent of 0.5 and no finite-size effects. This makes it well-suited as a reference model for developing intuition, providing a comparison against experimental data, or offering normalization factors for simulations or experiments alike.
+The AFRC reproduces the dimensions of a polypeptide in a theta solvent: an ideal chain with a scaling exponent of exactly 0.5 and no finite-size effects. It is a reference model, not a predictor. It tells you how an IDR of a given sequence would behave if chain-chain and chain-solvent interactions exactly cancelled out, which makes it a useful null model for simulations and experiments alike.
 
-We developed the AFRC as a convenient tool for contextualizing simulations and experiments of disordered proteins. The AFRC is *not* a predictor of the dimensions of intrinsically disordered proteins or protein regions, but it does offer a 'null model' for how one might expect an IDR of a given sequence to behave if chain-chain and chain-solvent interactions were perfectly counterbalanced. 
+The model is pre-parameterized against numerical simulations, so the only input is an amino acid sequence. From that, the AFRC instantly returns:
 
-The AFRC is parameterized against numerical simulations that recapitulate *bona fide* theta solvent behavior. As such, you only need to provide an amino acid sequence as input, and the AFRC can provide a variety of information back instantaneously, including:
+1. The mean end-to-end distance and its distribution.
+2. The mean radius of gyration and its distribution.
+3. The mean hydrodynamic radius.
+4. Every inter-residue mean distance and distance distribution (distance maps and internal scaling profiles).
+5. Inter-residue contact fractions (contact maps).
+6. Expected paramagnetic relaxation enhancement (PRE) profiles.
 
-1. The ensemble-average end-to-end distance.
-2. The end-to-end distance distribution.
-3. The ensemble-average radius of gyration.
-4. The radius of gyration distribution.
-5. The ensemble-average hydrodynamic radius.
-6. All inter-residue average distances and distance distributions.
-7. Inter-residue contact fractions.
-
-
-Finally, the afrc package also implements several additional polymer models, including the worm-like chain (WLC) model [Zhou2004]_ [Brien2009]_, the self-avoiding walk (SAW) model [Brien2009]_, a scaling-exponent SAW model (SAW-ν) [Zheng2018]_, the freely jointed chain, and the freely rotating chain. Each shares a common interface with the AFRC, so the same sequence can be compared against several reference frames - see :doc:`polymer_models/index` for the formalism behind each and :doc:`polymer_models_application/index` for usage.
+The package also implements several other analytical polymer models: the worm-like chain [Zhou2004]_ [Brien2009]_, the self-avoiding walk [Brien2009]_, a SAW with a tunable scaling exponent [Zheng2018]_, the freely jointed chain and the freely rotating chain. They share a common interface with the AFRC, so one sequence can be compared against several reference models. See :doc:`polymer_models/index` for the theory behind each and :doc:`polymer_models_application/index` for usage.
 
 
 .. toctree::
@@ -34,7 +25,7 @@ Finally, the afrc package also implements several additional polymer models, inc
    quickstart
    polymer_models/index
    polymer_models_application/index
-   
+
 
 
 Indices and tables
