@@ -13,6 +13,8 @@
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
 import os
+import re
+import subprocess
 import sys
 sys.path.insert(0, os.path.abspath('..'))
 
@@ -23,10 +25,108 @@ project = 'AFRC'
 copyright = ("2019 - 2026, Holehouse Lab")
 author = 'Alex Holehouse'
 
-# The short X.Y version
-version = ''
-# The full version, including alpha/beta/rc tags
-release = ''
+# The version is read automatically so the docs always build with the current
+# afrc version rather than a hardcoded string (this mirrors SOURSOP). We try, in
+# order:
+#   1. versioningit computed straight from the git tags. This works on Read the
+#      Docs (versioningit is a docs dependency) even though RTD never installs
+#      the afrc package, and it ignores any stale installed distribution.
+#   2. the versioningit-written afrc/_version.py, for built/installed trees
+#      (e.g. an sdist) that have no .git directory. NOTE this file is gitignored,
+#      so it is absent on a fresh clone - hence versioningit is tried first.
+#   3. the installed package metadata.
+#   4. "unknown".
+_REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")
+
+
+def _git_can_see_a_tag():
+    # afrc's pyproject sets versioningit's default-tag to 1.0.0, so in a clone
+    # where no tag is reachable (e.g. a shallow clone more than --depth commits
+    # past the last release) versioningit quietly reports "1.0.0". We only trust
+    # it when git can actually see a tag
+    try:
+        subprocess.run(["git", "describe", "--tags", "--abbrev=0"], cwd=_REPO_ROOT,
+                       check=True, capture_output=True)
+        return True
+    except (OSError, subprocess.CalledProcessError):
+        return False
+
+
+def _get_afrc_version():
+    # 1. versioningit from git
+    try:
+        import versioningit
+
+        if _git_can_see_a_tag():
+            _v = versioningit.get_version(project_dir=_REPO_ROOT)
+            # reject the pyproject default-version ("1+unknown") used when git/tags
+            # cannot be resolved
+            if _v and "unknown" not in _v:
+                return _v
+    except Exception:
+        pass
+
+    # 2. versioningit-written _version.py
+    try:
+        with open(os.path.join(_REPO_ROOT, "afrc", "_version.py")) as _fh:
+            _m = re.search(r"""__version__\s*=\s*['"]([^'"]+)['"]""", _fh.read())
+            if _m:
+                return _m.group(1)
+    except OSError:
+        pass
+
+    # 3. installed package metadata
+    try:
+        from importlib.metadata import version as _dist_version, PackageNotFoundError
+
+        try:
+            return _dist_version("afrc")
+        except PackageNotFoundError:
+            pass
+    except Exception:
+        pass
+
+    return "unknown"
+
+
+def _get_release_date(rel):
+    """Month/Year the given version was released, from changelog.md.
+
+    The changelog entries carry the release month (e.g. ``* **0.4.2** (August
+    2026):``). We look up the entry matching ``rel``; if there is none, or it is
+    still marked "unreleased", we return "" and just the version is shown.
+    """
+    if rel == "unknown":
+        return ""
+    changelog = os.path.join(_REPO_ROOT, "changelog.md")
+    try:
+        with open(changelog) as _fh:
+            _text = _fh.read()
+    except OSError:
+        return ""
+    # exact match: "* **<rel>** (<Month Year>):"
+    _m = re.search(
+        r"^\*\s+\*\*" + re.escape(rel) + r"\*\*\s+\(([^)]+)\)", _text, re.MULTILINE
+    )
+    if _m and _m.group(1).strip().lower() != "unreleased":
+        return _m.group(1).strip()
+    return ""
+
+
+# The full version, including alpha/beta/rc tags (the PEP 440 local segment,
+# e.g. "+3.ge4c587b" for commits after a tag, is dropped for display); the
+# short X.Y version is derived from it.
+release = _get_afrc_version().split("+")[0]
+version = ".".join(release.split(".")[:2]) if release != "unknown" else release
+
+# The release Month/Year (from changelog.md). Exposed to .rst as the
+# |version_info| substitution below (version, optionally with the date).
+release_date = _get_release_date(release)
+if release_date:
+    _version_info = f"{release} (released {release_date})"
+else:
+    _version_info = release
+rst_prolog = f".. |version_info| replace:: {_version_info}\n"
 
 
 # -- General configuration ---------------------------------------------------
