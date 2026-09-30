@@ -39,6 +39,11 @@ Parameters
 
 **What to expect for a protein.** Because :math:`\langle R^2 \rangle \approx 2 L_p L_c`, the chain grows as :math:`\sqrt{L_p}` and shows Gaussian-coil scaling when :math:`L_c \gg L_p`. With :math:`L_p` in the 3-4 Å range the WLC is roughly 10-25% more compact than the :doc:`AFRC <afrc>`; matching the AFRC's dimensions needs :math:`L_p \approx 5` Å.
 
+3D ensembles
+---------------------------------------------------------
+
+``sample_conformations()`` generates the worm-like chain itself rather than the Zhou approximation: each residue is split into short straight sub-segments, each bending away from the previous one with a fixed mean cosine, and only the bead at the end of each residue is kept. That cosine is either the worm-like chain's own tangent correlation, :math:`e^{-s/L_p}` for sub-segments of length :math:`s`, or - for chains that are flexible on the scale of a residue - :math:`(2L_p - s)/(2L_p + s)`, which reproduces the chain's long-range size exactly and so needs far fewer sub-segments (221 rather than 807 per residue at :math:`L_p = 0.1` Å); whichever needs fewer is used. The number of sub-segments is chosen automatically so the mean-squared distances match the exact worm-like chain :math:`\langle r_{ij}^2 \rangle = 2 L_p L - 2 L_p^2 (1 - e^{-L/L_p})` (with :math:`L = |i-j|\, b`) to within 0.02% at every separation. ``WormLikeChain`` and ``WormLikeChain2`` generate identical ensembles. ``check_ensemble()`` and ``afrc-ensemble -m wlc`` (see :doc:`../cli`) check an ensemble against those mean-squared distances and finite extensibility, and compare it with the Zhou :math:`P(r)` as context.
+
 Citations
 ---------------------------------------------------------
 

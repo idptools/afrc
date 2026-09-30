@@ -50,6 +50,14 @@ dependencies = [
 test = [
   "pytest>=6.1.2",
 ]
+# writing ensembles as XTC trajectories (AnalyticalFRC.save_ensemble) needs mdtraj
+ensemble = [
+  "mdtraj",
+]
+
+# command-line tools
+[project.scripts]
+afrc-ensemble = "afrc.cli:ensemble_main"
 
 [project.urls]
 Homepage = "https://github.com/idptools/afrc"

@@ -7,7 +7,11 @@ Copyright Alex Holehouse 2018-2026 (holehouselab.com).
 
 """
 import numpy as np
+from numpy.typing import NDArray
 from afrc.config import P_OF_R_RESOLUTION
+from afrc.ensemble import (freely_rotating_chain_msd, mean_squared_distance_map, sample_freely_jointed_chain,
+                           save_conformations, validate_n_conformations)
+from afrc.ensemble_report import EnsembleReport, ModelExpectations, compare_ensemble_to_model
 from numpy.random import choice
 
 class FJCException(Exception):
@@ -41,7 +45,7 @@ class FreelyJointedChain:
 
     # .....................................................................................
     #
-    def __init__(self, seq, p_of_r_resolution=P_OF_R_RESOLUTION, b=3.8):
+    def __init__(self, seq: str, p_of_r_resolution: float = P_OF_R_RESOLUTION, b: float = 3.8) -> None:
         """
         Create a FreelyJointedChain object.
 
@@ -71,8 +75,10 @@ class FreelyJointedChain:
         if self.b <= 0:
             raise FJCException('Error, b (segment length) cannot be less than or equal to 0')
 
-        # set sequence info - the number of segments
+        # set sequence info - the number of segments. The sequence itself is only
+        # used to name residues when an ensemble is written to disk
         self.nres = len(seq)
+        self.seq = seq
 
         # p_of_r_resolution defines the P(r) resolution in angstroms - i.e. basically
         # the spacing between r values in a P(r) vs. r plot
@@ -263,3 +269,153 @@ class FreelyJointedChain:
         # finally normalize so sums to 1.0 and assign to the object
         self.__p_of_Re_P = p_val_raw / np.sum(p_val_raw)
         self.__p_of_Re_R = p_dist
+
+
+    # .....................................................................................
+    #
+    def get_mean_squared_distance_map(self) -> NDArray[np.float64]:
+        """
+        Return the exact mean-squared distance between every pair of residues.
+
+        Beads k residues apart are joined by k freely jointed bonds, so
+        :math:`\\langle r^2 \\rangle = k b^2` exactly.
+
+        Returns
+        -------
+        np.ndarray
+            Symmetric [N x N] matrix of mean-squared distances (in Angstroms
+            squared), with zeros on the diagonal.
+
+        """
+        return mean_squared_distance_map(self.nres, lambda k: freely_rotating_chain_msd(k, self.b, 0.0))
+
+
+    # .....................................................................................
+    #
+    def sample_conformations(self, n: int = 1000, seed: int | np.random.Generator | None = None) -> NDArray[np.float64]:
+        """
+        Generate 3D conformations (one bead per residue) of the freely jointed chain.
+
+        Consecutive beads are joined by bonds of exactly ``b`` pointing in
+        independent, uniformly random directions - the freely jointed chain
+        itself, not an approximation to it. (Note that the model's analytical
+        end-to-end distribution, the Kuhn-Grün form, is itself an approximation
+        that becomes exact for long chains.)
+
+        Parameters
+        ----------
+        n : int
+            Number of conformations. Default is 1000.
+
+        seed : int, np.random.Generator or None
+            Seed (or generator) for reproducible ensembles. If None (default) a
+            fresh, unpredictable seed is used.
+
+        Returns
+        -------
+        np.ndarray
+            Array of shape [n x N x 3] with the bead coordinates, in Angstroms,
+            each conformation centred on the origin.
+
+        Raises
+        ------
+        AFRCException
+            If ``n`` is not a positive integer.
+
+        """
+        return sample_freely_jointed_chain(self.nres, self.b, validate_n_conformations(n), np.random.default_rng(seed))
+
+
+    # .....................................................................................
+    #
+    def save_ensemble(self, filename: str, n: int = 1000, seed: int | np.random.Generator | None = None,
+                      pdb_only: bool = False) -> NDArray[np.float64]:
+        """
+        Generate a freely jointed chain ensemble and write it to disk.
+
+        Writes ``<filename>.pdb`` (topology and first conformation) and
+        ``<filename>.xtc`` (every conformation; needs mdtraj), or with
+        ``pdb_only=True`` a single multi-model ``<filename>.pdb``. See
+        ``sample_conformations()`` for how the conformations are generated.
+
+        Parameters
+        ----------
+        filename : str
+            Output path without an extension (a trailing ``.pdb`` or ``.xtc`` is
+            dropped).
+
+        n : int
+            Number of conformations. Default is 1000.
+
+        seed : int, np.random.Generator or None
+            Seed (or generator) for reproducible ensembles.
+
+        pdb_only : bool
+            Write a single multi-model PDB instead of a PDB/XTC pair. Default is
+            False.
+
+        Returns
+        -------
+        np.ndarray
+            The conformations that were written, shape [n x N x 3] (Angstroms).
+
+        Raises
+        ------
+        AFRCException
+            If ``n`` is invalid, the sequence has non-standard amino acids, mdtraj
+            is missing (for a PDB/XTC pair), or the PDB format limits are exceeded.
+
+        """
+        from afrc import __version__
+
+        conformations = self.sample_conformations(n=n, seed=seed)
+        save_conformations(conformations, self.seq, filename, pdb_only=pdb_only,
+                           remark=f'Freely jointed chain ensemble (b = {self.b:g} A) from afrc {__version__}: {len(conformations)} conformations')
+        return conformations
+
+
+    # .....................................................................................
+    #
+    def check_ensemble(self, conformations: NDArray[np.float64]) -> EnsembleReport:
+        """
+        Check how well an ensemble reproduces the freely jointed chain.
+
+        The exact checks are the mean-squared distance of every residue pair
+        (:math:`k b^2`, in bands of separation), the root-mean-square radius of
+        gyration and first-to-last distance that follow from them, and the
+        chain's geometry: every bond exactly ``b`` long and no pair further apart
+        than its contour length. The model's analytical (Kuhn-Grün) end-to-end
+        distribution and its radius of gyration are reported as context.
+
+        Parameters
+        ----------
+        conformations : np.ndarray
+            Array of shape [n_conformations x N x 3] (in Angstroms).
+
+        Returns
+        -------
+        EnsembleReport
+            The checks; ``report.passed`` says whether the ensemble is model-like
+            and ``report.format()`` gives a printable report.
+
+        Raises
+        ------
+        AFRCException
+            If the conformations do not match this chain.
+
+        """
+        end_to_end = None
+        if self.nres >= 2:
+            end_to_end = FreelyJointedChain('A' * (self.nres - 1), self.p_of_r_resolution, b=self.b).get_end_to_end_distribution()
+
+        expectations = ModelExpectations(
+            'Freely jointed chain', self.get_mean_squared_distance_map(),
+            bond_length=self.b, contour_length_per_residue=self.b,
+            reference_rg=self.get_mean_radius_of_gyration(),
+            reference_rg_label='RMS Rg (sqrt(<Re^2>/6) for N segments)',
+            reference_re=self.get_root_mean_squared_end_to_end_distance(),
+            reference_re_label='whole-chain RMS Re (N segments)',
+            end_to_end_distribution=end_to_end,
+            end_to_end_label='the Kuhn-Grün P(r) for N-1 segments (an approximation that is exact for long chains)')
+        return compare_ensemble_to_model(conformations, expectations)
+

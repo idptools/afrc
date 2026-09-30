@@ -70,6 +70,11 @@ Parameters
 ballpark of the theta-state AFRC; raising :math:`C_\infty` swells the chain while preserving
 ideal (:math:`\nu = 0.5`) scaling.
 
+3D ensembles
+---------------------------------------------------------
+
+``sample_conformations()`` builds freely rotating chains directly: bonds of exactly :math:`b`, every bond angle fixed (at :math:`180^\circ - \arccos\alpha`, e.g. 109.47° for ``c_inf = 2``) and every torsion uniformly random. Its mean-squared distances are exactly the finite-:math:`N` result above for every pair of residues, but for short separations its distance distributions are not Gaussian, unlike the analytical :math:`P(r)`. Note that ``c_inf = 1`` gives a fixed 90° bond angle - the same mean-squared size as the freely jointed chain, but a different chain. ``check_ensemble()`` and ``afrc-ensemble -m frc`` (see :doc:`../cli`) check an ensemble against the exact mean-squared distances, the fixed bond length and angle, and finite extensibility.
+
 Citations
 ---------------------------------------------------------
 

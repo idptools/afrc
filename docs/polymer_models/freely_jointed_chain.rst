@@ -56,6 +56,11 @@ matching the AFRC through the bulk of the distribution. The differences appear i
 (the FJC has a hard cutoff at :math:`L = Nb`) and at short chain lengths, where finite
 extensibility pulls the mean and RMS slightly below the Gaussian values.
 
+3D ensembles
+---------------------------------------------------------
+
+``sample_conformations()`` builds freely jointed chains directly: bonds of exactly :math:`b` pointing in independent, uniformly random directions. The ensemble *is* the freely jointed chain, so its mean-squared distances are exactly :math:`\langle r_{ij}^2 \rangle = |i-j|\, b^2`; note that the analytical Kuhn-Grün distribution above is itself an approximation that becomes exact for long chains. ``check_ensemble()`` and ``afrc-ensemble -m fjc`` (see :doc:`../cli`) check an ensemble against the exact mean-squared distances, the fixed bond length and finite extensibility.
+
 Citations
 ---------------------------------------------------------
 

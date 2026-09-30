@@ -10,7 +10,11 @@ Copyright Alex Holehouse 2018-2026 (holehouselab.com).
 
 """
 import numpy as np
+from numpy.typing import NDArray
 from afrc.config import P_OF_R_RESOLUTION
+from afrc.ensemble import (freely_rotating_chain_msd, mean_squared_distance_map, sample_freely_rotating_chain,
+                           save_conformations, validate_n_conformations)
+from afrc.ensemble_report import EnsembleReport, ModelExpectations, compare_ensemble_to_model
 from numpy.random import choice
 
 class FRCException(Exception):
@@ -53,7 +57,7 @@ class FreelyRotatingChain:
 
     # .....................................................................................
     #
-    def __init__(self, seq, p_of_r_resolution=P_OF_R_RESOLUTION, b=3.8, c_inf=2.0):
+    def __init__(self, seq: str, p_of_r_resolution: float = P_OF_R_RESOLUTION, b: float = 3.8, c_inf: float = 2.0) -> None:
         """
         Create a FreelyRotatingChain object.
 
@@ -93,8 +97,10 @@ class FreelyRotatingChain:
         if self.c_inf <= 0:
             raise FRCException('Error, c_inf (characteristic ratio) cannot be less than or equal to 0')
 
-        # set sequence info - the number of bonds
+        # set sequence info - the number of bonds. The sequence itself is only used
+        # to name residues when an ensemble is written to disk
         self.nres = len(seq)
+        self.seq = seq
 
         # p_of_r_resolution defines the P(r) resolution in angstroms - i.e. basically
         # the spacing between r values in a P(r) vs. r plot
@@ -279,3 +285,176 @@ class FreelyRotatingChain:
         # finally normalize so sums to 1.0 and assign to the object
         self.__p_of_Re_P = p_val_raw / np.sum(p_val_raw)
         self.__p_of_Re_R = p_dist
+
+
+    # .....................................................................................
+    #
+    def _cos_angle(self) -> float:
+        """
+        Return the cosine of the angle between successive bond vectors.
+
+        Returns
+        -------
+        float
+            :math:`\\alpha = (C_\\infty - 1)/(C_\\infty + 1)`.
+
+        """
+        return (self.c_inf - 1.0) / (self.c_inf + 1.0)
+
+
+    # .....................................................................................
+    #
+    def get_mean_squared_distance_map(self) -> NDArray[np.float64]:
+        """
+        Return the exact mean-squared distance between every pair of residues.
+
+        For beads k bonds apart this is the exact finite-k freely rotating chain
+        result (see the class docstring) - the same expression the model uses for
+        the whole chain.
+
+        Returns
+        -------
+        np.ndarray
+            Symmetric [N x N] matrix of mean-squared distances (in Angstroms
+            squared), with zeros on the diagonal.
+
+        """
+        cos_angle = self._cos_angle()
+        return mean_squared_distance_map(self.nres, lambda k: freely_rotating_chain_msd(k, self.b, cos_angle))
+
+
+    # .....................................................................................
+    #
+    def sample_conformations(self, n: int = 1000, seed: int | np.random.Generator | None = None) -> NDArray[np.float64]:
+        """
+        Generate 3D conformations (one bead per residue) of the freely rotating chain.
+
+        Consecutive beads are joined by bonds of exactly ``b``, every pair of
+        consecutive bonds meets at the same bond angle (set by ``c_inf``), and
+        each torsion is uniformly random - the freely rotating chain itself. Its
+        mean-squared distances are exact; its distance distributions are not
+        Gaussian for short separations, unlike the model's analytical P(r),
+        which is a Gaussian with the right mean-squared size. Note that
+        ``c_inf = 1`` gives a fixed 90 degree bond angle, which has the same
+        mean-squared size as the freely jointed chain but is a different chain.
+
+        Parameters
+        ----------
+        n : int
+            Number of conformations. Default is 1000.
+
+        seed : int, np.random.Generator or None
+            Seed (or generator) for reproducible ensembles. If None (default) a
+            fresh, unpredictable seed is used.
+
+        Returns
+        -------
+        np.ndarray
+            Array of shape [n x N x 3] with the bead coordinates, in Angstroms,
+            each conformation centred on the origin.
+
+        Raises
+        ------
+        AFRCException
+            If ``n`` is not a positive integer.
+
+        """
+        return sample_freely_rotating_chain(self.nres, self.b, self._cos_angle(), validate_n_conformations(n), np.random.default_rng(seed))
+
+
+    # .....................................................................................
+    #
+    def save_ensemble(self, filename: str, n: int = 1000, seed: int | np.random.Generator | None = None,
+                      pdb_only: bool = False) -> NDArray[np.float64]:
+        """
+        Generate a freely rotating chain ensemble and write it to disk.
+
+        Writes ``<filename>.pdb`` (topology and first conformation) and
+        ``<filename>.xtc`` (every conformation; needs mdtraj), or with
+        ``pdb_only=True`` a single multi-model ``<filename>.pdb``. See
+        ``sample_conformations()`` for how the conformations are generated.
+
+        Parameters
+        ----------
+        filename : str
+            Output path without an extension (a trailing ``.pdb`` or ``.xtc`` is
+            dropped).
+
+        n : int
+            Number of conformations. Default is 1000.
+
+        seed : int, np.random.Generator or None
+            Seed (or generator) for reproducible ensembles.
+
+        pdb_only : bool
+            Write a single multi-model PDB instead of a PDB/XTC pair. Default is
+            False.
+
+        Returns
+        -------
+        np.ndarray
+            The conformations that were written, shape [n x N x 3] (Angstroms).
+
+        Raises
+        ------
+        AFRCException
+            If ``n`` is invalid, the sequence has non-standard amino acids, mdtraj
+            is missing (for a PDB/XTC pair), or the PDB format limits are exceeded.
+
+        """
+        from afrc import __version__
+
+        conformations = self.sample_conformations(n=n, seed=seed)
+        save_conformations(conformations, self.seq, filename, pdb_only=pdb_only,
+                           remark=(f'Freely rotating chain ensemble (b = {self.b:g} A, c_inf = {self.c_inf:g}) from afrc {__version__}: '
+                                   f'{len(conformations)} conformations'))
+        return conformations
+
+
+    # .....................................................................................
+    #
+    def check_ensemble(self, conformations: NDArray[np.float64]) -> EnsembleReport:
+        """
+        Check how well an ensemble reproduces the freely rotating chain.
+
+        The exact checks are the mean-squared distance of every residue pair (in
+        bands of separation), the root-mean-square radius of gyration and
+        first-to-last distance that follow from them, and the chain's geometry:
+        every bond exactly ``b`` long, every bond angle fixed by ``c_inf``, and
+        no pair further apart than its contour length. The model's analytical
+        (Gaussian) end-to-end distribution and its radius of gyration are
+        reported as context.
+
+        Parameters
+        ----------
+        conformations : np.ndarray
+            Array of shape [n_conformations x N x 3] (in Angstroms).
+
+        Returns
+        -------
+        EnsembleReport
+            The checks; ``report.passed`` says whether the ensemble is model-like
+            and ``report.format()`` gives a printable report.
+
+        Raises
+        ------
+        AFRCException
+            If the conformations do not match this chain.
+
+        """
+        end_to_end = None
+        if self.nres >= 2:
+            end_to_end = FreelyRotatingChain('A' * (self.nres - 1), self.p_of_r_resolution, b=self.b,
+                                             c_inf=self.c_inf).get_end_to_end_distribution()
+
+        expectations = ModelExpectations(
+            'Freely rotating chain', self.get_mean_squared_distance_map(),
+            bond_length=self.b, bond_angle_cosine=self._cos_angle(), contour_length_per_residue=self.b,
+            reference_rg=self.get_mean_radius_of_gyration(),
+            reference_rg_label='RMS Rg (sqrt(<Re^2>/6) for N bonds)',
+            reference_re=self.get_root_mean_squared_end_to_end_distance(),
+            reference_re_label='whole-chain RMS Re (N bonds)',
+            end_to_end_distribution=end_to_end,
+            end_to_end_label='the Gaussian P(r) with the exact <R^2> for N-1 bonds (Gaussian only for long chains)')
+        return compare_ensemble_to_model(conformations, expectations)
+

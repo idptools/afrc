@@ -92,6 +92,11 @@ default 5.5 Å a :math:`\nu = 0.5` chain comes out roughly 12% more compact than
 as a :math:`\nu`-tunable version of the AFRC, set ``prefactor`` to the AFRC's
 :math:`R_0^{\mathrm{rms}}` for your sequence; the two then agree closely at :math:`\nu = 0.5`.
 
+3D ensembles
+---------------------------------------------------------
+
+As for the :doc:`fixed-exponent SAW <self_avoiding_walk>`, ``sample_conformations()`` generates a *Gaussian approximation*: bead coordinates are drawn exactly from the Gaussian chain with :math:`\langle r_{ij}^2 \rangle = (\texttt{prefactor}\,|i-j|^{\nu})^2` (fractional Brownian motion, valid for any :math:`0 < \nu < 1`), so the size and scaling are right at every separation but the distributions are Gaussian and there is no excluded volume. ``check_ensemble()`` and ``afrc-ensemble -m saw-nu`` (see :doc:`../cli`) check an ensemble against the exact mean-squared distances and show the differences from the SAW's own :math:`P(r)` and :math:`R_g` as context.
+
 Citations
 ---------------------------------------------------------
 

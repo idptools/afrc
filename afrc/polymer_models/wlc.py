@@ -7,6 +7,10 @@ Copyright Alex Holehouse 2018-2026 (holehouselab.com).
 
 """
 import numpy as np
+from numpy.typing import NDArray
+from afrc.ensemble import (discrete_worm_like_chain_msd, mean_squared_distance_map, sample_worm_like_chain, save_conformations,
+                           validate_n_conformations, worm_like_chain_discretization, worm_like_chain_msd)
+from afrc.ensemble_report import EnsembleReport, ModelExpectations, compare_ensemble_to_model
 from afrc.config import P_OF_R_RESOLUTION
 
 class WLCException(Exception):
@@ -39,7 +43,7 @@ class WormLikeChain:
 
     # .....................................................................................
     #
-    def __init__(self, seq, p_of_r_resolution=P_OF_R_RESOLUTION, lp=3.0, aa_size=3.8):
+    def __init__(self, seq: str, p_of_r_resolution: float = P_OF_R_RESOLUTION, lp: float = 3.0, aa_size: float = 3.8) -> None:
         """
         Create a WormLikeChain object.
 
@@ -70,8 +74,11 @@ class WormLikeChain:
 
         # note that input validation is done in the AnalyticalFRC object constructor
 
-        # set sequence info
+        # set sequence info. The sequence itself is only used to name residues when
+        # an ensemble is written to disk
         self.nres = len(seq)
+        self.seq = seq
+        self._discretization = None
 
         # first cast to floats
         self.lp = float(lp)
@@ -255,3 +262,207 @@ class WormLikeChain:
         # finally normalize so sums to 1.0 and assign to the object
         self.__p_of_Re_P = p_val_raw/total
         self.__p_of_Re_R = p_dist
+
+
+    # .....................................................................................
+    #
+    def _ensemble_discretization(self) -> tuple[int, float]:
+        """
+        Return how the chain is discretized to generate ensembles.
+
+        Chosen (once, then cached) by ``worm_like_chain_discretization()`` so the
+        discretized chain matches the continuous worm-like chain's mean-squared
+        distances to within 0.02% at every separation in the chain.
+
+        Returns
+        -------
+        tuple of (int, float)
+            Sub-segments per residue, and the correlation between successive
+            sub-segments.
+
+        """
+        if self._discretization is None:
+            self._discretization = worm_like_chain_discretization(self.b, self.lp, self.nres)
+        return self._discretization
+
+
+    # .....................................................................................
+    #
+    def get_mean_squared_distance_map(self) -> NDArray[np.float64]:
+        """
+        Return the exact mean-squared distance between every pair of residues.
+
+        For beads k residues apart (contour length :math:`L = k b`) this is the
+        exact worm-like chain result
+        :math:`\\langle r^2 \\rangle = 2 L_p L - 2 L_p^2 (1 - e^{-L/L_p})`.
+
+        Returns
+        -------
+        np.ndarray
+            Symmetric [N x N] matrix of mean-squared distances (in Angstroms
+            squared), with zeros on the diagonal.
+
+        """
+        return mean_squared_distance_map(self.nres, lambda k: worm_like_chain_msd(k * self.b, self.lp))
+
+
+    # .....................................................................................
+    #
+    def sample_conformations(self, n: int = 1000, seed: int | np.random.Generator | None = None) -> NDArray[np.float64]:
+        """
+        Generate 3D conformations (one bead per residue) of the worm-like chain.
+
+        Each residue is split into short straight sub-segments, each bending away
+        from the previous one with a fixed mean cosine, and only the bead at the
+        end of each residue is kept. That correlation is either the worm-like
+        chain's own, :math:`e^{-s/L_p}` for sub-segments of length :math:`s`, or -
+        for chains that are flexible on the scale of a residue - one that
+        reproduces its long-range size exactly with far fewer sub-segments (see
+        ``afrc.ensemble.worm_like_chain_discretization()``). Either way the
+        number of sub-segments is chosen so the mean-squared distances match the
+        continuous worm-like chain to within 0.02% at every separation. This
+        samples the worm-like chain itself; the model's analytical end-to-end
+        distribution (Zhou 2004) is an approximation to it.
+
+        Parameters
+        ----------
+        n : int
+            Number of conformations. Default is 1000.
+
+        seed : int, np.random.Generator or None
+            Seed (or generator) for reproducible ensembles. If None (default) a
+            fresh, unpredictable seed is used.
+
+        Returns
+        -------
+        np.ndarray
+            Array of shape [n x N x 3] with the bead coordinates, in Angstroms,
+            each conformation centred on the origin.
+
+        Raises
+        ------
+        AFRCException
+            If ``n`` is not a positive integer.
+
+        """
+        m, correlation = self._ensemble_discretization()
+        return sample_worm_like_chain(self.nres, self.b, validate_n_conformations(n), np.random.default_rng(seed), m, correlation)
+
+
+    # .....................................................................................
+    #
+    def save_ensemble(self, filename: str, n: int = 1000, seed: int | np.random.Generator | None = None,
+                      pdb_only: bool = False) -> NDArray[np.float64]:
+        """
+        Generate a worm-like chain ensemble and write it to disk.
+
+        Writes ``<filename>.pdb`` (topology and first conformation) and
+        ``<filename>.xtc`` (every conformation; needs mdtraj), or with
+        ``pdb_only=True`` a single multi-model ``<filename>.pdb``. See
+        ``sample_conformations()`` for how the conformations are generated.
+
+        Parameters
+        ----------
+        filename : str
+            Output path without an extension (a trailing ``.pdb`` or ``.xtc`` is
+            dropped).
+
+        n : int
+            Number of conformations. Default is 1000.
+
+        seed : int, np.random.Generator or None
+            Seed (or generator) for reproducible ensembles.
+
+        pdb_only : bool
+            Write a single multi-model PDB instead of a PDB/XTC pair. Default is
+            False.
+
+        Returns
+        -------
+        np.ndarray
+            The conformations that were written, shape [n x N x 3] (Angstroms).
+
+        Raises
+        ------
+        AFRCException
+            If ``n`` is invalid, the sequence has non-standard amino acids, mdtraj
+            is missing (for a PDB/XTC pair), or the PDB format limits are exceeded.
+
+        """
+        from afrc import __version__
+
+        conformations = self.sample_conformations(n=n, seed=seed)
+        save_conformations(conformations, self.seq, filename, pdb_only=pdb_only,
+                           remark=(f'Worm-like chain ensemble (lp = {self.lp:g} A, aa_size = {self.b:g} A) from afrc {__version__}: '
+                                   f'{len(conformations)} conformations'))
+        return conformations
+
+
+    # .....................................................................................
+    #
+    def check_ensemble(self, conformations: NDArray[np.float64]) -> EnsembleReport:
+        """
+        Check how well an ensemble reproduces the worm-like chain.
+
+        The exact checks are the mean-squared distance of every residue pair (in
+        bands of separation), the root-mean-square radius of gyration and
+        first-to-last distance that follow from them, and finite extensibility
+        (no pair further apart than its contour length). The expected values are
+        those of the discretized chain ``sample_conformations()`` draws from,
+        which differs from the continuous worm-like chain by at most 0.02% (the
+        report notes the exact figure). The model's analytical end-to-end
+        distribution (Zhou 2004) is reported as context.
+
+        Parameters
+        ----------
+        conformations : np.ndarray
+            Array of shape [n_conformations x N x 3] (in Angstroms).
+
+        Returns
+        -------
+        EnsembleReport
+            The checks; ``report.passed`` says whether the ensemble is model-like
+            and ``report.format()`` gives a printable report.
+
+        Raises
+        ------
+        AFRCException
+            If the conformations do not match this chain.
+
+        """
+        m, correlation = self._ensemble_discretization()
+        discrete = mean_squared_distance_map(self.nres, lambda k: discrete_worm_like_chain_msd(k, self.b, m, correlation))
+        continuous = self.get_mean_squared_distance_map()
+        off_diagonal = continuous > 0
+        deviation = float(np.max(np.abs(discrete[off_diagonal] / continuous[off_diagonal] - 1))) if np.any(off_diagonal) else 0.0
+
+        # the analytical forms are only valid for long enough chains, so these
+        # context comparisons are skipped when they cannot be evaluated
+        reference_re = None
+        end_to_end = None
+        try:
+            reference_re = float(self.get_root_mean_squared_end_to_end_distance())
+        except WLCException:
+            pass
+        if self.nres >= 2:
+            try:
+                end_to_end = WormLikeChain('A' * (self.nres - 1), self.p_of_r_resolution, lp=self.lp,
+                                        aa_size=self.b).get_end_to_end_distribution()
+            except WLCException:
+                pass
+        reference_rg = None
+
+        expectations = ModelExpectations(
+            'Worm-like chain (Zhou)', discrete,
+            contour_length_per_residue=self.b,
+            reference_rg=reference_rg,
+            reference_rg_label='RMS Rg (Benoit-Doty, N residues)',
+            reference_re=reference_re,
+            reference_re_label='whole-chain RMS Re from its analytical P(r) (N residues)',
+            end_to_end_distribution=end_to_end,
+            end_to_end_label='the Zhou 2004 P(r) for N-1 residues (an approximation to the worm-like chain)',
+            notes=(f'The ensemble is a discretized worm-like chain ({m} straight sub-segments per residue); its mean-squared '
+                   f'distances differ from the continuous worm-like chain by at most {100 * deviation:.3f}%, and the checks above '
+                   f'use the discretized values.',))
+        return compare_ensemble_to_model(conformations, expectations)
+

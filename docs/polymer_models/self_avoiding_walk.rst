@@ -67,6 +67,11 @@ expanded* than the AFRC and is an appropriate reference for a strongly solvated,
 The prefactor sets where the absolute dimensions land; with a value near 5.5 Å the SAW gives
 end-to-end and :math:`R_g` values noticeably larger than the theta-state AFRC.
 
+3D ensembles
+---------------------------------------------------------
+
+``sample_conformations()`` generates a *Gaussian approximation* to the SAW: bead coordinates are drawn exactly from the Gaussian chain whose mean-squared distances are the model's, :math:`\langle r_{ij}^2 \rangle = (\texttt{prefactor}\,|i-j|^{0.598})^2`. The size and scaling of every inter-residue distance are therefore right, but the distance distributions are Gaussian rather than the des Cloizeaux form above, there is no excluded volume (beads can overlap), and the radius of gyration comes out about 5% below the universal-ratio value (whatever the chain length). Genuine self-avoiding conformations would need an explicit simulation. ``check_ensemble()`` and ``afrc-ensemble -m saw`` (see :doc:`../cli`) check an ensemble against the exact mean-squared distances and show these differences as context.
+
 Citations
 ---------------------------------------------------------
 
