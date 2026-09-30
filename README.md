@@ -39,6 +39,12 @@ The package also ships a family of classic analytical polymer models with a comm
 pip install afrc
 ```
 
+Writing 3D ensembles as XTC trajectories also needs mdtraj, which you can install alongside afrc:
+
+```bash
+pip install "afrc[ensemble]"
+```
+
 ## Quick start
 
 ```python
@@ -77,7 +83,7 @@ afrc-ensemble -s MEEPQSDPSVEPPLSQETFSDLWKLLPENNVLSPLPSQAMDDLMLSPDDI -n 5000 -o p
 afrc-ensemble -s MEEPQSDPSVEPPLSQETFSDLWKLLPENNVLSPLPSQAMDDLMLSPDDI -m wlc --lp 4 -o p53_wlc  # a worm-like chain
 ```
 
-This writes `p53.pdb` and `p53.xtc` (use `--pdb-only` for a single multi-model PDB instead) and a report, `p53_report.txt`, that checks the ensemble reproduces the model's statistics - radius of gyration, end-to-end distance, inter-residue distances and, where the model fixes them, bond lengths and angles - to within sampling error. The AFRC, freely jointed chain, freely rotating chain and worm-like chain ensembles are exact; the SAW and nu-dependent SAW ensembles are a Gaussian approximation with the right mean-squared distances (the report says so). Run `afrc-ensemble --help` for all the models and options. Writing XTC files needs mdtraj (`pip install "afrc[ensemble]"`). From Python, every model has `sample_conformations()`, `save_ensemble()` and `check_ensemble()`.
+This writes `p53.pdb` and `p53.xtc` (use `--pdb-only` for a single multi-model PDB instead) and a report, `p53_report.txt`, that checks the ensemble reproduces the model's statistics - radius of gyration, end-to-end distance, inter-residue distances and, where the model fixes them, bond lengths and angles - to within sampling error. The AFRC, freely jointed chain and freely rotating chain ensembles are exact, and the worm-like chain ensembles match the exact chain to within 0.02%; the SAW and nu-dependent SAW ensembles are a Gaussian approximation with the right mean-squared distances (the report says so). Run `afrc-ensemble --help` for all the models and options. Writing XTC files needs mdtraj (`pip install "afrc[ensemble]"`). From Python, every model has `sample_conformations()`, `save_ensemble()` and `check_ensemble()`.
 
 ## Polymer models included
 

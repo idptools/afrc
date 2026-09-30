@@ -24,4 +24,9 @@ Everything in the AFRC is accessed through an ``AnalyticalFRC`` object, built fr
    # contact fractions at a 15 A threshold for every pair of residues
    contact_map = protein.get_contact_map(15.0)
 
-Residue indices start at 0. See :doc:`polymer_models_application/afrc` for the full set of methods.
+   # 1000 3D conformations (one bead per residue), written as ens.pdb + ens.xtc
+   # (the XTC needs mdtraj), and a report on how well they reproduce the model
+   xyz = protein.save_ensemble('ens', n=1000, seed=1)
+   print(protein.check_ensemble(xyz).format())
+
+Residue indices start at 0. See :doc:`polymer_models_application/afrc` for the full set of methods, and :doc:`cli` for generating ensembles from the command line with ``afrc-ensemble``.
