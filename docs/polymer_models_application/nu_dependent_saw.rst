@@ -34,6 +34,23 @@ Sweep the scaling exponent from collapsed (nu ~ 1/3) to fully expanded (nu ~ 0.5
 
 See also the ``demo/demo_NuDepSAW.ipynb`` notebook for a worked, plotted example.
 
+Generating 3D ensembles
+---------------------------------------------------------
+
+Generate explicit conformations (one bead per residue), write them to disk, and check how well they reproduce the model:
+
+.. code-block:: python
+
+   model = NuDepSAW('MASNDYTQQATQSYGAYPTQPGQGYSQQSSQPYG')
+
+   xyz = model.sample_conformations(n=5000, seed=1, nu=0.55, prefactor=5.5)                 # [n x N x 3] array, Angstroms
+   model.save_ensemble('ens', n=5000, seed=1, nu=0.55, prefactor=5.5)                       # ens.pdb + ens.xtc (needs mdtraj)
+   print(model.check_ensemble(xyz, nu=0.55, prefactor=5.5).format())                  # the model-check report
+
+A Gaussian approximation: the mean-squared distances are exact, but the distance distributions are Gaussian and there is no excluded volume (see :doc:`../polymer_models/nu_dependent_saw`).
+
+Or from the command line: ``afrc-ensemble -s <sequence> -m saw-nu`` (see :doc:`../cli`).
+
 Code reference
 ---------------------------------------------------------
 

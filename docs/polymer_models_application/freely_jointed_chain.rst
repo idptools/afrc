@@ -34,6 +34,21 @@ Change the segment length to make the chain stiffer or more flexible:
 
 See also the ``demo/demo_FreelyJointedChain.ipynb`` notebook for a worked, plotted example.
 
+Generating 3D ensembles
+---------------------------------------------------------
+
+Generate explicit conformations (one bead per residue), write them to disk, and check how well they reproduce the model:
+
+.. code-block:: python
+
+   model = FreelyJointedChain('MASNDYTQQATQSYGAYPTQPGQGYSQQSSQPYG')
+
+   xyz = model.sample_conformations(n=5000, seed=1)                 # [n x N x 3] array, Angstroms
+   model.save_ensemble('ens', n=5000, seed=1)                       # ens.pdb + ens.xtc (needs mdtraj)
+   print(model.check_ensemble(xyz).format())                  # the model-check report
+
+Or from the command line: ``afrc-ensemble -s <sequence> -m fjc`` (see :doc:`../cli`).
+
 Code reference
 ---------------------------------------------------------
 

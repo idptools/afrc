@@ -35,6 +35,21 @@ chain; larger values give a stiffer, more extended ideal chain):
 
 See also the ``demo/demo_FreelyRotatingChain.ipynb`` notebook for a worked, plotted example.
 
+Generating 3D ensembles
+---------------------------------------------------------
+
+Generate explicit conformations (one bead per residue), write them to disk, and check how well they reproduce the model:
+
+.. code-block:: python
+
+   model = FreelyRotatingChain('MASNDYTQQATQSYGAYPTQPGQGYSQQSSQPYG', c_inf=2.0)
+
+   xyz = model.sample_conformations(n=5000, seed=1)                 # [n x N x 3] array, Angstroms
+   model.save_ensemble('ens', n=5000, seed=1)                       # ens.pdb + ens.xtc (needs mdtraj)
+   print(model.check_ensemble(xyz).format())                  # the model-check report
+
+Or from the command line: ``afrc-ensemble -s <sequence> -m frc`` (see :doc:`../cli`).
+
 Code reference
 ---------------------------------------------------------
 

@@ -7,6 +7,10 @@ Copyright Alex Holehouse 2018-2026 (holehouselab.com).
 
 """
 import numpy as np
+from numpy.typing import NDArray
+from afrc.ensemble import (gaussian_chain_factor, mean_squared_distance_map, sample_gaussian_chain, save_conformations,
+                           validate_n_conformations)
+from afrc.ensemble_report import EnsembleReport, ModelExpectations, compare_ensemble_to_model
 from afrc.config import P_OF_R_RESOLUTION
 
 class SAWException(Exception):
@@ -44,7 +48,7 @@ class SAW:
 
     # .....................................................................................
     #
-    def __init__(self, seq, p_of_r_resolution=P_OF_R_RESOLUTION):
+    def __init__(self, seq: str, p_of_r_resolution: float = P_OF_R_RESOLUTION) -> None:
         """
         Create a SAW object.
 
@@ -78,8 +82,13 @@ class SAW:
         self.nu = 0.598
         self.gamma = 1.1615
 
-        # set sequence info
+        # set sequence info. The sequence itself is only used to name residues when
+        # an ensemble is written to disk
         self.nres = len(seq)
+        self.seq = seq
+
+        # covariance factors for generating ensembles (see sample_conformations)
+        self._unit_factors = {}
 
         # p_of_r_resolution defines the P(r) resolution in angstroms - i.e. basically
         # the spacing between r values in a P(r) vs. r plot
@@ -314,3 +323,217 @@ class SAW:
         # finally normalize so sums to 1.0 and assign to the object
         self.__p_of_Re_P = p_val_raw/np.sum(p_val_raw)
         self.__p_of_Re_R = p_dist
+
+
+    # .....................................................................................
+    #
+    def get_mean_squared_distance_map(self, prefactor: float = 5.5) -> NDArray[np.float64]:
+        """
+        Return the model's mean-squared distance between every pair of residues.
+
+        Applying the model's size scaling to every pair of residues,
+        :math:`\\langle r_{ij}^2 \\rangle = (\\texttt{prefactor}\\, |i - j|^{\\nu})^2`.
+
+        Parameters
+        ----------
+        prefactor : float
+            Size scale in Angstroms, so that the root-mean-square distance between
+            residues k apart is ``prefactor * k**0.598``. Default is 5.5 A.
+
+
+        Returns
+        -------
+        np.ndarray
+            Symmetric [N x N] matrix of mean-squared distances (in Angstroms
+            squared), with zeros on the diagonal.
+
+        Raises
+        ------
+        SAWException
+            If a parameter is out of range.
+
+        """
+        prefactor = float(prefactor)
+        if prefactor <= 0:
+            raise SAWException('Error, prefactor must be greater than 0 (it sets the size scale in Angstroms)')
+        nu = self.nu
+
+        return mean_squared_distance_map(self.nres, lambda k: prefactor * prefactor * np.power(k, 2 * nu))
+
+
+    # .....................................................................................
+    #
+    def sample_conformations(self, n: int = 1000, seed: int | np.random.Generator | None = None, prefactor: float = 5.5) -> NDArray[np.float64]:
+        """
+        Generate 3D conformations (one bead per residue) approximating the self-avoiding walk.
+
+        This is a Gaussian approximation: the bead coordinates are drawn exactly
+        from the Gaussian chain whose mean-squared inter-residue distances are
+        the model's, :math:`(\\texttt{prefactor}\\, |i - j|^{\\nu})^2`, so the size
+        and scaling of every inter-residue distance are right. The distance
+        distributions are Gaussian rather than the SAW's des Cloizeaux form, and
+        there is no excluded volume, so beads can overlap. (Genuine
+        self-avoiding conformations would need an explicit simulation.)
+
+        Parameters
+        ----------
+        n : int
+            Number of conformations. Default is 1000.
+
+        seed : int, np.random.Generator or None
+            Seed (or generator) for reproducible ensembles. If None (default) a
+            fresh, unpredictable seed is used.
+
+        prefactor : float
+            Size scale in Angstroms, so that the root-mean-square distance between
+            residues k apart is ``prefactor * k**0.598``. Default is 5.5 A.
+
+
+        Returns
+        -------
+        np.ndarray
+            Array of shape [n x N x 3] with the bead coordinates, in Angstroms,
+            each conformation centred on the origin.
+
+        Raises
+        ------
+        AFRCException
+            If ``n`` is not a positive integer.
+
+        SAWException
+            If a parameter is out of range.
+
+        """
+        prefactor = float(prefactor)
+        if prefactor <= 0:
+            raise SAWException('Error, prefactor must be greater than 0 (it sets the size scale in Angstroms)')
+        nu = self.nu
+
+        n_conformations = validate_n_conformations(n)
+
+        # the coordinates scale linearly with the prefactor, so we factor the
+        # covariance once (for a prefactor of 1) and rescale
+        key = self.nu
+        if key not in self._unit_factors:
+            self._unit_factors[key] = gaussian_chain_factor(mean_squared_distance_map(self.nres, lambda k: np.power(k, 2 * nu)))
+        return prefactor * sample_gaussian_chain(self._unit_factors[key], n_conformations, np.random.default_rng(seed))
+
+
+    # .....................................................................................
+    #
+    def save_ensemble(self, filename: str, n: int = 1000, seed: int | np.random.Generator | None = None,
+                      pdb_only: bool = False, prefactor: float = 5.5) -> NDArray[np.float64]:
+        """
+        Generate a self-avoiding walk ensemble (Gaussian approximation) and write it to disk.
+
+        Writes ``<filename>.pdb`` (topology and first conformation) and
+        ``<filename>.xtc`` (every conformation; needs mdtraj), or with
+        ``pdb_only=True`` a single multi-model ``<filename>.pdb``. See
+        ``sample_conformations()`` for how the conformations are generated.
+
+        Parameters
+        ----------
+        filename : str
+            Output path without an extension (a trailing ``.pdb`` or ``.xtc`` is
+            dropped).
+
+        n : int
+            Number of conformations. Default is 1000.
+
+        seed : int, np.random.Generator or None
+            Seed (or generator) for reproducible ensembles.
+
+        pdb_only : bool
+            Write a single multi-model PDB instead of a PDB/XTC pair. Default is
+            False.
+
+        prefactor : float
+            Size scale in Angstroms, so that the root-mean-square distance between
+            residues k apart is ``prefactor * k**0.598``. Default is 5.5 A.
+
+
+        Returns
+        -------
+        np.ndarray
+            The conformations that were written, shape [n x N x 3] (Angstroms).
+
+        Raises
+        ------
+        AFRCException
+            If ``n`` is invalid, the sequence has non-standard amino acids, mdtraj
+            is missing (for a PDB/XTC pair), or the PDB format limits are exceeded.
+
+        SAWException
+            If a parameter is out of range.
+
+        """
+        from afrc import __version__
+
+        conformations = self.sample_conformations(n=n, seed=seed, prefactor=prefactor)
+        save_conformations(conformations, self.seq, filename, pdb_only=pdb_only,
+                           remark=(f'Self-avoiding walk ensemble (Gaussian approximation; prefactor = {prefactor:g} A) from afrc {__version__}: '
+                                   f'{len(conformations)} conformations'))
+        return conformations
+
+
+    # .....................................................................................
+    #
+    def check_ensemble(self, conformations: NDArray[np.float64], prefactor: float = 5.5) -> EnsembleReport:
+        """
+        Check how well an ensemble reproduces the self-avoiding walk.
+
+        The exact checks are the mean-squared distance of every residue pair (in
+        bands of separation) and the root-mean-square radius of gyration and
+        first-to-last distance that follow from them. The SAW's analytical (des
+        Cloizeaux) end-to-end distribution and its radius of gyration from the
+        universal SAW ratio are reported as context, together with a note that
+        ensembles from ``sample_conformations()`` are a Gaussian approximation.
+
+        Parameters
+        ----------
+        conformations : np.ndarray
+            Array of shape [n_conformations x N x 3] (in Angstroms).
+
+        prefactor : float
+            Size scale in Angstroms, so that the root-mean-square distance between
+            residues k apart is ``prefactor * k**0.598``. Default is 5.5 A.
+
+
+        Returns
+        -------
+        EnsembleReport
+            The checks; ``report.passed`` says whether the ensemble is model-like
+            and ``report.format()`` gives a printable report.
+
+        Raises
+        ------
+        AFRCException
+            If the conformations do not match this chain.
+
+        SAWException
+            If a parameter is out of range.
+
+        """
+        prefactor = float(prefactor)
+        if prefactor <= 0:
+            raise SAWException('Error, prefactor must be greater than 0 (it sets the size scale in Angstroms)')
+        nu = self.nu
+
+        end_to_end = None
+        if self.nres >= 2:
+            end_to_end = SAW('A' * (self.nres - 1), self.p_of_r_resolution).get_end_to_end_distribution(prefactor=prefactor)
+
+        expectations = ModelExpectations(
+            'Self-avoiding walk', self.get_mean_squared_distance_map(prefactor=prefactor),
+            reference_rg=float(self.get_mean_radius_of_gyration(prefactor=prefactor)),
+            reference_rg_label='RMS Rg (universal SAW ratio, N residues)',
+            reference_re=float(prefactor * np.power(self.nres, nu)),
+            reference_re_label='whole-chain RMS Re (prefactor * N^nu)',
+            end_to_end_distribution=end_to_end,
+            end_to_end_label="the SAW's des Cloizeaux P(r) for N-1 residues",
+            notes=('This ensemble is a Gaussian approximation to the self-avoiding walk: it reproduces the model\'s mean-squared '
+                   'distances, prefactor * |i - j|^nu, exactly (the checks above), but its distance distributions are Gaussian '
+                   'rather than the SAW\'s des Cloizeaux form, and there is no excluded volume, so beads can overlap. The '
+                   'context comparisons with the SAW\'s P(r) and radius of gyration show the size of those differences.',))
+        return compare_ensemble_to_model(conformations, expectations)
+

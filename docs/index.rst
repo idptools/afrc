@@ -15,8 +15,9 @@ The model is pre-parameterized against numerical simulations, so the only input 
 4. Every inter-residue mean distance and distance distribution (distance maps and internal scaling profiles).
 5. Inter-residue contact fractions (contact maps).
 6. Expected paramagnetic relaxation enhancement (PRE) profiles.
+7. Explicit 3D ensembles (one bead per residue), written as PDB/XTC files - from Python or with the :doc:`afrc-ensemble <cli>` command-line tool, which also checks the ensemble against the model.
 
-The package also implements several other analytical polymer models: the worm-like chain [Zhou2004]_ [Brien2009]_, the self-avoiding walk [Brien2009]_, a SAW with a tunable scaling exponent [Zheng2018]_, the freely jointed chain and the freely rotating chain. They share a common interface with the AFRC, so one sequence can be compared against several reference models. See :doc:`polymer_models/index` for the theory behind each and :doc:`polymer_models_application/index` for usage.
+The package also implements several other analytical polymer models: the worm-like chain [Zhou2004]_ [Brien2009]_, the self-avoiding walk [Brien2009]_, a SAW with a tunable scaling exponent [Zheng2018]_, the freely jointed chain and the freely rotating chain. They share a common interface with the AFRC - including generating 3D ensembles - so one sequence can be compared against several reference models. See :doc:`polymer_models/index` for the theory behind each and :doc:`polymer_models_application/index` for usage.
 
 
 .. toctree::
@@ -28,6 +29,7 @@ The package also implements several other analytical polymer models: the worm-li
    quickstart
    polymer_models/index
    polymer_models_application/index
+   cli
 
 
 

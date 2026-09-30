@@ -53,6 +53,11 @@ The contour length must be at least one persistence length (:math:`N b \ge L_p`)
 
 **What to expect for a protein.** Results closely track the Zhou model for typical disordered-protein parameters, and match the exact worm-like chain :math:`\langle R^2 \rangle` to within a fraction of a percent across chain lengths and stiffnesses.
 
+3D ensembles
+---------------------------------------------------------
+
+``sample_conformations()`` generates the worm-like chain itself, exactly as described for the :doc:`Zhou model <worm_like_chain_zhou>` (the two classes generate identical ensembles). ``check_ensemble()`` and ``afrc-ensemble -m wlc2`` (see :doc:`../cli`) check an ensemble against the exact worm-like chain mean-squared distances and finite extensibility, and compare it with the O'Brien :math:`P(r)` and the Benoit-Doty :math:`R_g` as context.
+
 Citations
 ---------------------------------------------------------
 

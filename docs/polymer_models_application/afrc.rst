@@ -49,6 +49,44 @@ Draw a size-matched sample (e.g. to compare against a simulation trajectory):
 
 See also the ``demo/demo_AnalyticalFRC.ipynb`` notebook for a worked, plotted example.
 
+Generating 3D ensembles
+---------------------------------------------------------
+
+The AFRC can also generate explicit 3D conformations, one bead per residue, drawn exactly from the model (see :doc:`../polymer_models/afrc` for how). Save them as a PDB/XTC pair for analysis or visualization, or work with the coordinates directly:
+
+.. code-block:: python
+
+   # writes p53.pdb (topology + first conformation) and p53.xtc (all 5000 conformations)
+   xyz = P.save_ensemble('p53', n=5000, seed=1)
+
+   # or just the coordinates: an [n x N x 3] array in Angstroms
+   xyz = P.sample_conformations(n=5000, seed=1)
+
+Writing the XTC file needs mdtraj (``pip install "afrc[ensemble]"``). The pair loads directly into mdtraj or SOURSOP:
+
+.. code-block:: python
+
+   import mdtraj as md
+   traj = md.load('p53.xtc', top='p53.pdb')
+
+   from soursop.sstrajectory import SSTrajectory
+   protein = SSTrajectory('p53.xtc', 'p53.pdb').proteinTrajectoryList[0]
+
+Note that adjacent beads are not at a fixed 3.8 Å spacing and can overlap: the ensemble follows the AFRC's own inter-residue distance distributions, including for neighbouring residues. Pass ``pdb_only=True`` to ``save_ensemble()`` to write every conformation to a single multi-model PDB file instead (no mdtraj needed, at most 9999 conformations).
+
+Checking an ensemble
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``check_ensemble()`` reports how well an ensemble reproduces the AFRC - every quantity the model fixes exactly, each with a standard error estimated from the ensemble:
+
+.. code-block:: python
+
+   report = P.check_ensemble(xyz)
+   report.passed          # True for a model-like ensemble
+   print(report.format())
+
+The same thing is available from the command line, for this and every other model, with ``afrc-ensemble`` - see :doc:`../cli`.
+
 Code reference
 ---------------------------------------------------------
 
@@ -56,3 +94,14 @@ Code reference
    :members:
 
    .. automethod:: __init__
+
+Ensemble utilities
+---------------------------------------------------------
+
+The functions behind ``sample_conformations()``, ``save_ensemble()`` and ``afrc-ensemble``, which can also be used to write, or check, your own one-bead-per-residue coordinates.
+
+.. automodule:: afrc.ensemble
+   :members: write_ensemble, write_pdb, write_multimodel_pdb, write_xtc, save_conformations, gaussian_chain_factor, sample_gaussian_chain, sample_freely_jointed_chain, sample_freely_rotating_chain, sample_worm_like_chain, freely_rotating_chain_msd, worm_like_chain_msd, discrete_worm_like_chain_msd, worm_like_chain_discretization, mean_squared_distance_map
+
+.. automodule:: afrc.ensemble_report
+   :members: compare_ensemble_to_model, compare_ensemble_to_gaussian_model, ModelExpectations, EnsembleReport, Check

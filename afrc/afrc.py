@@ -12,8 +12,12 @@ Copyright Alex Holehouse 2018-2026 (holehouselab.com).
 
 """
 import numpy as np
+from numpy.typing import NDArray
+
 from .polymer import PolymerObject
-from .config import P_OF_R_RESOLUTION, AA_list
+from .config import P_OF_R_RESOLUTION, AA_list, RIJ_RMS_R0
+from .ensemble import gaussian_chain_factor, sample_gaussian_chain, save_conformations, validate_n_conformations
+from .ensemble_report import EnsembleReport, compare_ensemble_to_gaussian_model
 from .exceptions import AFRCException
 from .iofunctions import validate_keyword
 from .polymer_models import wlc
@@ -71,7 +75,7 @@ class AnalyticalFRC:
 
     # .....................................................................................
     #
-    def __init__(self, seq, adaptable_P_res=False):
+    def __init__(self, seq: str, adaptable_P_res: bool = False) -> None:
         """
         Create an AnalyticalFRC object from an amino acid sequence.
 
@@ -121,6 +125,10 @@ class AnalyticalFRC:
 
         self.full_seq_PO = PolymerObject(seq, self.p_of_r_resolution)
         self.matrix=False
+
+        # covariance factor for generating 3D conformations; built on first use by
+        # sample_conformations()
+        self.__ensemble_factor = None
 
         # finally we define other polymer models which are attached as their own
         # class objects
@@ -450,7 +458,7 @@ class AnalyticalFRC:
 
     # .....................................................................................
     #
-    def get_mean_radius_of_gyration(self, calculation_mode='distribution'):
+    def get_mean_radius_of_gyration(self, calculation_mode: str = 'distribution') -> float:
         """
         Return the mean radius of gyration, :math:`\\langle R_g \\rangle`.
 
@@ -482,7 +490,7 @@ class AnalyticalFRC:
 
     # .....................................................................................
     #
-    def get_mean_end_to_end_distance(self, calculation_mode='scaling law'):
+    def get_mean_end_to_end_distance(self, calculation_mode: str = 'scaling law') -> float:
         """
         Return the mean end-to-end distance, :math:`\\langle R_e \\rangle`.
 
@@ -1095,3 +1103,221 @@ class AnalyticalFRC:
 
         indices = np.arange(0,len(self.seq))
         return [indices, profile, gamma]
+
+
+    # .....................................................................................
+    #
+    def get_mean_squared_distance_map(self) -> NDArray[np.float64]:
+        """
+        Return the mean-squared distance between every pair of residues.
+
+        For residues :math:`i` and :math:`j` this is
+        :math:`\\langle r_{ij}^2 \\rangle = (R_0^{rms})^2 |i - j|`, with
+        :math:`R_0^{rms}` the average per-residue prefactor over the segment
+        between them - exactly the value used by the inter-residue distance
+        distributions. Because every AFRC inter-residue distance is Gaussian, this
+        matrix fully specifies the model's pairwise statistics (and is what
+        ``sample_conformations()`` draws from). Unlike ``get_distance_map()`` it
+        does not build the inter-residue matrix; every pair is computed at once
+        from a running sum of the per-residue prefactors, so it is fast even for
+        long sequences.
+
+        Returns
+        -------
+        np.ndarray
+            Symmetric [n x n] matrix of mean-squared distances (in Angstroms
+            squared), with zeros on the diagonal.
+
+        """
+
+        n = len(self.seq)
+        prefactors = np.array([RIJ_RMS_R0[residue] for residue in self.seq])
+        running_sum = np.concatenate(([0.0], np.cumsum(prefactors)))
+
+        i, j = np.meshgrid(np.arange(n), np.arange(n), indexing='ij')
+        lower, upper = np.minimum(i, j), np.maximum(i, j)
+        separation = upper - lower
+
+        # (sum of prefactors)^2 / |i - j| = (mean prefactor)^2 * |i - j|; the
+        # diagonal (zero separation) is zero
+        segment_sum = running_sum[upper] - running_sum[lower]
+        with np.errstate(divide='ignore', invalid='ignore'):
+            return np.where(separation > 0, segment_sum*segment_sum/separation, 0.0)
+
+
+    # .....................................................................................
+    #
+    def sample_conformations(self, n: int = 1000, seed: int | np.random.Generator | None = None) -> NDArray[np.float64]:
+        """
+        Generate 3D conformations (one bead per residue) drawn from the AFRC.
+
+        The AFRC defines every inter-residue distance as Gaussian, with a
+        mean-squared value set by the composition of the sequence between the two
+        residues. Taken together, those distances define a Gaussian chain whose
+        bead coordinates are jointly Gaussian, with covariance
+
+        .. math::
+
+           C = -\\frac{1}{6} J D J, \\qquad D_{ij} = \\langle r_{ij}^2 \\rangle,
+           \\qquad J = I - \\frac{1}{n}\\mathbf{1}\\mathbf{1}^T
+
+        for each of x, y and z. We factor :math:`C` once per sequence and then
+        draw conformations from it directly. Every inter-residue distance in the
+        resulting ensemble has exactly the AFRC's distance distribution, for
+        every pair of residues at once - this is not an approximation or a fit.
+
+        There are a few things worth knowing about the ensembles:
+
+        * Adjacent beads are not at a fixed 3.8 A spacing. Their separation
+          follows the AFRC's own distribution for neighbouring residues (a mean of
+          ~5.8 A, with most values between 2 and 10 A).
+        * The AFRC is an ideal chain, so there is no excluded volume and beads can
+          overlap.
+        * The end-to-end distance of the ensemble is the distance between the
+          first and last residues, which the AFRC treats as a chain of N-1
+          residues. It therefore matches
+          ``get_mean_interresidue_distance(0, N-1)``, which is slightly smaller
+          than ``get_mean_end_to_end_distance()`` (N residues).
+        * The radius of gyration is that of the Gaussian chain, which agrees with
+          ``get_mean_radius_of_gyration()`` to within ~2% (the AFRC's Rg was
+          calibrated separately from its distances).
+
+        Each conformation is centred on the origin and randomly oriented.
+
+        Parameters
+        ----------
+        n : int
+            Number of conformations to generate. Default is 1000.
+
+        seed : int, np.random.Generator or None
+            Seed (or generator) for the random numbers, for reproducible
+            ensembles. If None (default) a fresh, unpredictable seed is used.
+
+        Returns
+        -------
+        np.ndarray
+            Array of shape [n x N x 3] with the bead coordinates, in Angstroms,
+            where N is the sequence length.
+
+        Raises
+        ------
+        AFRCException
+            If ``n`` is not a positive integer.
+
+        Examples
+        --------
+        >>> protein = AnalyticalFRC('MEEPQSDPSVEPPLSQETFSDLWKLLPENNVLSPLPSQAMDDLMLSPDDI')
+        >>> xyz = protein.sample_conformations(n=5000, seed=1)
+        >>> xyz.shape
+        (5000, 50, 3)
+
+        """
+
+        n_conformations = validate_n_conformations(n)
+
+        # factoring the covariance is O(N^3) but only needs doing once per sequence
+        if self.__ensemble_factor is None:
+            self.__ensemble_factor = gaussian_chain_factor(self.get_mean_squared_distance_map())
+
+        return sample_gaussian_chain(self.__ensemble_factor, n_conformations, np.random.default_rng(seed))
+
+
+    # .....................................................................................
+    #
+    def save_ensemble(self, filename: str, n: int = 1000, seed: int | np.random.Generator | None = None, pdb_only: bool = False) -> NDArray[np.float64]:
+        """
+        Generate an AFRC ensemble and write it to disk.
+
+        This draws ``n`` conformations with ``sample_conformations()`` and, by
+        default, writes them as a PDB/XTC pair: ``<filename>.pdb`` (the topology,
+        one CA bead per residue, holding the first conformation) and
+        ``<filename>.xtc`` (every conformation). Load them together with, for
+        example, ``mdtraj.load('ens.xtc', top='ens.pdb')`` or SOURSOP's
+        ``SSTrajectory('ens.xtc', 'ens.pdb')``. Writing the XTC file needs mdtraj
+        (``pip install mdtraj``).
+
+        With ``pdb_only=True`` every conformation is instead written to a single
+        multi-model ``<filename>.pdb``, which needs no extra dependencies but is
+        larger and limited to 9999 conformations.
+
+        Parameters
+        ----------
+        filename : str
+            Output path without an extension; ``.pdb`` (and ``.xtc``) are added.
+            If the name already ends in ``.pdb`` or ``.xtc`` that extension is
+            dropped first.
+
+        n : int
+            Number of conformations to generate. Default is 1000.
+
+        seed : int, np.random.Generator or None
+            Seed (or generator) for the random numbers, for reproducible
+            ensembles. If None (default) a fresh, unpredictable seed is used.
+
+        pdb_only : bool
+            If True, write a single multi-model PDB file instead of a PDB/XTC
+            pair. Default is False.
+
+        Returns
+        -------
+        np.ndarray
+            The conformations that were written, as an array of shape [n x N x 3]
+            in Angstroms.
+
+        Raises
+        ------
+        AFRCException
+            If ``n`` is not a positive integer, mdtraj is not installed (for a
+            PDB/XTC pair), the sequence is longer than the PDB format allows (9999
+            residues), there are more than 9999 conformations (with
+            ``pdb_only=True``), or a conformation that goes in the PDB file does
+            not fit in the PDB coordinate format.
+
+        """
+
+        from . import __version__
+
+        conformations = self.sample_conformations(n=n, seed=seed)
+        save_conformations(conformations, self.seq, filename, pdb_only=pdb_only,
+                           remark=f'AFRC ensemble from afrc {__version__}: {len(conformations)} conformations')
+        return conformations
+
+
+    # .....................................................................................
+    #
+    def check_ensemble(self, conformations: NDArray[np.float64]) -> EnsembleReport:
+        """
+        Check how well an ensemble reproduces the AFRC's statistics.
+
+        Every quantity the AFRC fixes exactly is measured in the ensemble, with a
+        standard error estimated from the ensemble, and compared with the model:
+        the root-mean-square radius of gyration, the first-to-last bead distance,
+        the Kirkwood-Riseman hydrodynamic radius, the mean-squared and mean
+        inter-residue distances (in bands of sequence separation), and the full
+        distribution of three representative distances. The AFRC's separately
+        calibrated :math:`\\langle R_g \\rangle` and its whole-chain
+        :math:`\\langle R_e \\rangle` are reported as context. This is the report
+        that ``afrc-ensemble`` prints.
+
+        Parameters
+        ----------
+        conformations : np.ndarray
+            Array of shape [n_conformations x N x 3] (in Angstroms), e.g. from
+            ``sample_conformations()``.
+
+        Returns
+        -------
+        EnsembleReport
+            The checks; ``report.passed`` says whether the ensemble is model-like
+            and ``report.format()`` gives a printable report.
+
+        Raises
+        ------
+        AFRCException
+            If the conformations do not match this sequence.
+
+        """
+        return compare_ensemble_to_gaussian_model(conformations, self.get_mean_squared_distance_map(),
+                                                  model_name='AFRC',
+                                                  reference_mean_rg=self.get_mean_radius_of_gyration(),
+                                                  reference_mean_re=self.get_mean_end_to_end_distance())

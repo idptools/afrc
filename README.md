@@ -25,6 +25,7 @@
 - the mean distance and distance distribution between any pair of residues, as well as distance maps and internal scaling profiles
 - inter-residue contact fractions and contact maps
 - expected paramagnetic relaxation enhancement (PRE) profiles
+- explicit 3D conformational ensembles (one bead per residue), written as PDB/XTC files - for the AFRC and every other model below
 
 The AFRC is a **reference (null) model**, not a predictor of real dimensions. Real unfolded-state dimensions depend on sequence-encoded chain-chain and chain-solvent interactions that the AFRC deliberately omits. Deviations of a simulation or experiment *from* the AFRC therefore report directly on those interactions, and normalizing to the AFRC puts chains of different length and composition on a common footing.
 
@@ -61,7 +62,22 @@ d_r, d_p = P.get_interresidue_distance_distribution(4, 20)
 # whole-chain maps
 distance_map = P.get_distance_map()
 contact_map  = P.get_contact_map(15.0)   # contact fractions at a 15 A threshold
+
+# 5000 3D conformations drawn from the AFRC, written as ens.pdb + ens.xtc
+# (the XTC needs mdtraj: pip install "afrc[ensemble]")
+xyz = P.save_ensemble('ens', n=5000, seed=1)
 ```
+
+## Generating 3D ensembles
+
+Every model can generate explicit 3D ensembles (one bead per residue). From the command line:
+
+```bash
+afrc-ensemble -s MEEPQSDPSVEPPLSQETFSDLWKLLPENNVLSPLPSQAMDDLMLSPDDI -n 5000 -o p53            # the AFRC
+afrc-ensemble -s MEEPQSDPSVEPPLSQETFSDLWKLLPENNVLSPLPSQAMDDLMLSPDDI -m wlc --lp 4 -o p53_wlc  # a worm-like chain
+```
+
+This writes `p53.pdb` and `p53.xtc` (use `--pdb-only` for a single multi-model PDB instead) and a report, `p53_report.txt`, that checks the ensemble reproduces the model's statistics - radius of gyration, end-to-end distance, inter-residue distances and, where the model fixes them, bond lengths and angles - to within sampling error. The AFRC, freely jointed chain, freely rotating chain and worm-like chain ensembles are exact; the SAW and nu-dependent SAW ensembles are a Gaussian approximation with the right mean-squared distances (the report says so). Run `afrc-ensemble --help` for all the models and options. Writing XTC files needs mdtraj (`pip install "afrc[ensemble]"`). From Python, every model has `sample_conformations()`, `save_ensemble()` and `check_ensemble()`.
 
 ## Polymer models included
 

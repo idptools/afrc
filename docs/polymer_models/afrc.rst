@@ -67,6 +67,21 @@ where the outer average runs over every pair of residues and the inner one is th
 
 **PRE profiles.** For a spin label at a given residue, distances to every other residue are sampled from the AFRC and converted, conformer by conformer, into transverse relaxation rates :math:`\Gamma_2 \propto r^{-6}` and intensity ratios, which are then averaged. Averaging per conformer matters because relaxation depends very non-linearly on distance. The spin-label linker is not modelled.
 
+**3D ensembles.** Because every inter-residue distance is Gaussian, the AFRC defines a Gaussian chain, and explicit conformations (one bead per residue) can be drawn from it exactly. The bead coordinates are jointly Gaussian; for each of :math:`x`, :math:`y` and :math:`z` the covariance is
+
+.. math::
+
+   C = -\frac{1}{6} J D J, \qquad D_{ij} = \langle r_{ij}^2 \rangle,
+   \qquad J = I - \frac{1}{N}\mathbf{1}\mathbf{1}^T,
+
+so factoring :math:`C = A A^T` once and computing :math:`A z` for standard normal vectors :math:`z` gives centred, randomly oriented conformations. Every inter-residue distance in the resulting ensemble follows the AFRC's distribution exactly, for all pairs at once. :math:`C` must be positive semi-definite for this to work; it is for every sequence we have tested, including sequences that alternate or block the residues with the largest and smallest prefactors. A few things follow from the model rather than the method:
+
+* adjacent beads follow the AFRC's neighbour distance distribution (mean ~5.8 Å), not a fixed 3.8 Å Cα spacing, and - as for any ideal chain - beads can overlap;
+* the first-to-last bead distance is the :math:`(0, N-1)` inter-residue distance, so it is slightly shorter than the whole-chain :math:`\langle R_e \rangle`;
+* :math:`R_g` is that of the Gaussian chain, within ~2% of the AFRC's separately calibrated :math:`\langle R_g \rangle`.
+
+The ``afrc-ensemble`` command-line tool generates such an ensemble and checks it against these exact expectations (see :doc:`../cli`).
+
 Behaviour and relationship to other models
 ---------------------------------------------------------
 
