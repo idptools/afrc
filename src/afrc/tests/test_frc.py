@@ -1,5 +1,5 @@
 """
-Tests for ``afrc/polymer_models/frc.py`` - the freely rotating chain model.
+Tests for ``src/afrc/polymer_models/frc.py`` - the freely rotating chain model.
 """
 
 import numpy as np

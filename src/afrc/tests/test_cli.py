@@ -1,5 +1,5 @@
 """
-Tests for the ``afrc-ensemble`` command-line tool (``afrc/cli.py``).
+Tests for the ``afrc-ensemble`` command-line tool (``src/afrc/cli.py``).
 
 The command is exercised through ``ensemble_main(argv)``, which is exactly what the
 installed console script calls.
@@ -194,7 +194,8 @@ def test_too_many_conformations_for_a_multimodel_pdb(tmp_path, capsys):
 # ---------------------------------------------------------------------------
 def test_console_script_is_declared():
     tomllib = pytest.importorskip('tomllib')
-    pyproject = os.path.join(os.path.dirname(afrc.__file__), os.pardir, 'pyproject.toml')
+    # pyproject.toml is two directories above the package in the src layout
+    pyproject = os.path.join(os.path.dirname(afrc.__file__), os.pardir, os.pardir, 'pyproject.toml')
     if not os.path.exists(pyproject):
         pytest.skip('not running from a source checkout')
     with open(pyproject, 'rb') as fh:

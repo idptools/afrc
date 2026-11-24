@@ -1,5 +1,5 @@
 """
-Tests for ``afrc/iofunctions.py`` - the ``validate_keyword`` helper.
+Tests for ``src/afrc/iofunctions.py`` - the ``validate_keyword`` helper.
 """
 
 import pytest

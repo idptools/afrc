@@ -13,13 +13,14 @@ For any questions please contact Alex.
 from afrc.afrc import *  # noqa: F401,F403
 
 
-def _resolve_version():
+def _resolve_version() -> str:
     """
     Resolve the package version, trying three sources in turn.
 
     The sources are (1) the ``_version.py`` file written by versioningit at
     build/install time, (2) the installed package metadata, and (3) versioningit
-    run directly against the git repository this file lives in.
+    run directly against the git repository this file lives in. For (3) we
+    assume the src layout, i.e. that this file is ``<repo>/src/afrc/__init__.py``.
 
     Returns
     -------
@@ -65,7 +66,12 @@ def _resolve_version():
     # placeholder version.
     import os
     import versioningit
-    return versioningit.get_version(os.path.join(os.path.dirname(__file__), os.pardir))
+
+    # the repository root (where pyproject.toml lives) is two directories above
+    # the package in the src layout: <repo>/src/afrc/
+    package_directory = os.path.dirname(__file__)
+    repository_root = os.path.join(package_directory, os.pardir, os.pardir)
+    return versioningit.get_version(repository_root)
 
 
 __version__ = _resolve_version()

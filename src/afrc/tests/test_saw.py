@@ -1,5 +1,5 @@
 """
-Tests for ``afrc/polymer_models/saw.py`` - the self-avoiding walk model.
+Tests for ``src/afrc/polymer_models/saw.py`` - the self-avoiding walk model.
 """
 
 import numpy as np

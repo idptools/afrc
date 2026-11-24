@@ -1,5 +1,5 @@
 """
-Tests for ``afrc/polymer_models/wlc2.py`` - the O'Brien worm-like chain model.
+Tests for ``src/afrc/polymer_models/wlc2.py`` - the O'Brien worm-like chain model.
 """
 
 import numpy as np

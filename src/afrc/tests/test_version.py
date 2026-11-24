@@ -1,5 +1,5 @@
 """
-Tests for version resolution in ``afrc/__init__.py``.
+Tests for version resolution in ``src/afrc/__init__.py``.
 """
 
 import os
@@ -41,9 +41,10 @@ def test_falls_back_to_versioningit_for_a_source_checkout(monkeypatch):
 
     assert afrc._resolve_version() == '8.8.8'
 
-    # versioningit is pointed at the repository root (the directory above the package)
+    # versioningit is pointed at the repository root (two directories above the
+    # package in the src layout: <repo>/src/afrc/)
     package_dir = os.path.dirname(afrc.__file__)
-    assert os.path.normpath(seen['path']) == os.path.normpath(os.path.join(package_dir, os.pardir))
+    assert os.path.normpath(seen['path']) == os.path.normpath(os.path.join(package_dir, os.pardir, os.pardir))
 
 
 def test_fails_loudly_if_no_source_works(monkeypatch):

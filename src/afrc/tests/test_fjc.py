@@ -1,5 +1,5 @@
 """
-Tests for ``afrc/polymer_models/fjc.py`` - the freely jointed chain model.
+Tests for ``src/afrc/polymer_models/fjc.py`` - the freely jointed chain model.
 """
 
 import numpy as np

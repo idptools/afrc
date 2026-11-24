@@ -1,6 +1,6 @@
 """
 Tests for 3D ensemble generation (``AnalyticalFRC.sample_conformations()`` and
-``save_ensemble()``) and the writers in ``afrc/ensemble.py``.
+``save_ensemble()``) and the writers in ``src/afrc/ensemble.py``.
 
 The statistical tests use fixed seeds, so they are deterministic; their
 tolerances are several standard errors wide.

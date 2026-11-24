@@ -1,5 +1,5 @@
 """
-Tests for ``afrc/polymer_models/nudep_saw.py`` - the nu-dependent SAW model.
+Tests for ``src/afrc/polymer_models/nudep_saw.py`` - the nu-dependent SAW model.
 """
 
 import numpy as np

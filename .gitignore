@@ -8,7 +8,7 @@ __pycache__/
 *.so
 
 # version.py
-afrc/_version.py
+src/afrc/_version.py
 
 # Distribution / packaging
 .Python

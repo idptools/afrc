@@ -1,5 +1,5 @@
 """
-Tests for ``afrc/ensemble_report.py`` - checking a generated ensemble against its model.
+Tests for ``src/afrc/ensemble_report.py`` - checking a generated ensemble against its model.
 
 All ensembles are drawn with fixed seeds, so these tests are deterministic.
 """

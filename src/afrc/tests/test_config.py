@@ -1,5 +1,5 @@
 """
-Tests for ``afrc/config.py`` - the parameter lookup tables.
+Tests for ``src/afrc/config.py`` - the parameter lookup tables.
 """
 
 from afrc.config import (

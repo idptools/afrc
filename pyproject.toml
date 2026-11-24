@@ -72,7 +72,7 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 namespaces = true
-where = ["."]
+where = ["src"]
 include = ["afrc", "afrc.*"]  # Discover all sub-packages inside the main package
 
 [tool.setuptools.package-data]
@@ -96,4 +96,4 @@ match = ["*"]
 default-tag = "1.0.0"
 
 [tool.versioningit.write]
-file = "afrc/_version.py"
+file = "src/afrc/_version.py"

@@ -1,5 +1,9 @@
 ## Changelog
 
+* **0.5.1** (unreleased):
+  * **Packaging:**
+    * Moved the package into a src layout (`afrc/` is now `src/afrc/`), so an editable install is a plain `.pth` path that static tools (Pylance/pyright, mypy) can resolve from other projects, rather than an import hook. Import names, the public API and the contents of the wheel are unchanged. Existing editable installs point at the old location and need re-running (`pip install -e .` from the repository root).
+
 * **0.5.0** (September 2026):
   * **New features - 3D conformational ensembles:**
     * Every polymer model can now generate explicit 3D ensembles with one bead per residue. `AnalyticalFRC`, `FreelyJointedChain`, `FreelyRotatingChain`, `WormLikeChain`, `WormLikeChain2`, `SAW` and `NuDepSAW` all gain the same four methods: `sample_conformations(n, seed)` returns an `[n x N x 3]` array (in Angstroms, each conformation centred on the origin), `save_ensemble(filename, n, seed, pdb_only)` writes it to disk, `check_ensemble(conformations)` reports how well it reproduces the model (see below), and `get_mean_squared_distance_map()` returns the model's exact mean-squared distance for every pair of residues. The SAW models take `prefactor` (and `nu`) as arguments to these methods, as they do for their existing ones.

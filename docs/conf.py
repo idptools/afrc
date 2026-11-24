@@ -16,7 +16,7 @@ import os
 import re
 import subprocess
 import sys
-sys.path.insert(0, os.path.abspath('..'))
+sys.path.insert(0, os.path.abspath(os.path.join('..', 'src')))
 
 
 # -- Project information -----------------------------------------------------
@@ -31,7 +31,7 @@ author = 'Alex Holehouse'
 #   1. versioningit computed straight from the git tags. This works on Read the
 #      Docs (versioningit is a docs dependency) even though RTD never installs
 #      the afrc package, and it ignores any stale installed distribution.
-#   2. the versioningit-written afrc/_version.py, for built/installed trees
+#   2. the versioningit-written src/afrc/_version.py, for built/installed trees
 #      (e.g. an sdist) that have no .git directory. NOTE this file is gitignored,
 #      so it is absent on a fresh clone - hence versioningit is tried first.
 #   3. the installed package metadata.
@@ -68,7 +68,7 @@ def _get_afrc_version():
 
     # 2. versioningit-written _version.py
     try:
-        with open(os.path.join(_REPO_ROOT, "afrc", "_version.py")) as _fh:
+        with open(os.path.join(_REPO_ROOT, "src", "afrc", "_version.py")) as _fh:
             _m = re.search(r"""__version__\s*=\s*['"]([^'"]+)['"]""", _fh.read())
             if _m:
                 return _m.group(1)

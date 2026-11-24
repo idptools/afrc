@@ -1,5 +1,5 @@
 """
-Tests for ``afrc/polymer.py`` - the internal ``PolymerObject`` class.
+Tests for ``src/afrc/polymer.py`` - the internal ``PolymerObject`` class.
 """
 
 import numpy as np

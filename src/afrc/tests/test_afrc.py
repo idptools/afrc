@@ -1,5 +1,5 @@
 """
-Tests for ``afrc/afrc.py`` - the user-facing ``AnalyticalFRC`` class.
+Tests for ``src/afrc/afrc.py`` - the user-facing ``AnalyticalFRC`` class.
 
 Shared fixtures (``protein``, ``all_aa``, ``test_seq``) come from conftest.py.
 """
